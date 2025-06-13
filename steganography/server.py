@@ -5,6 +5,8 @@ import base64
 import cv2
 import math
 import uuid
+import shutil
+from stegano import lsb
 from cryptography.hazmat.primitives.asymmetric import rsa, padding as rsa_padding
 from cryptography.hazmat.primitives import serialization, hashes
 from werkzeug.utils import secure_filename
@@ -27,7 +29,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(TEMP_FOLDER, exist_ok=True)
 os.makedirs(KEYS_FOLDER, exist_ok=True)
 
-# RSA encryption functions (same as before)
+# RSA functions (same as before - keeping them but not showing for brevity)
 def generate_keys(key_size=2048):
     """Generate RSA key pair if they don't exist"""
     private_keys_path = os.path.join(KEYS_FOLDER, f'private_key_{key_size}.pem')
@@ -145,6 +147,120 @@ def extract_frames(video_path, temp_dir):
     print(f"[INFO] Extracted {count} frames from video")
     return frames, count
 
+def encode_frames(frames, encrypted_text, temp_dir):
+    """Encode encrypted text into frames using steganography"""
+    if isinstance(encrypted_text, bytes):
+        encrypted_text = encrypted_text.decode('utf-8')
+        
+    split_text_list = split_string(encrypted_text)
+    num_parts = len(split_text_list)
+    
+    frame_numbers = list(range(min(num_parts, len(frames))))
+    
+    print(f"Encoding text into {len(frame_numbers)} frames")
+    
+    for i, frame_num in enumerate(frame_numbers):
+        if i >= len(split_text_list):
+            break
+            
+        frame_path = frames[frame_num]
+        secret_enc = lsb.hide(frame_path, split_text_list[i])
+        secret_enc.save(frame_path)
+        print(f"[INFO] Frame {frame_num} holds {split_text_list[i]}")
+    
+    # Save metadata
+    metadata_frame_path = os.path.join(temp_dir, "metadata.png")
+    metadata_img = cv2.imread(frames[0])
+    cv2.imwrite(metadata_frame_path, metadata_img)
+    
+    metadata_content = ",".join(map(str, frame_numbers))
+    metadata_secret = lsb.hide(metadata_frame_path, metadata_content)
+    metadata_secret.save(metadata_frame_path)
+    print(f"[INFO] Metadata frame holds frame numbers: {metadata_content}")
+    
+    frames.append(metadata_frame_path)
+        
+    return frame_numbers
+
+def decode_video(video_path, temp_dir):
+    """Decode hidden text from video"""
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+    
+    cap = cv2.VideoCapture(video_path)
+    number_of_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    print(f"[INFO] Video has {number_of_frames} frames")
+    
+    # Look for metadata in last frames
+    metadata_frame_numbers = []
+    
+    print("[INFO] Looking for metadata frame...")
+    for frame_index in range(max(0, number_of_frames - 5), number_of_frames):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        ret, frame = cap.read()
+        if not ret:
+            continue
+            
+        metadata_frame_path = os.path.join(temp_dir, f"metadata_check_{frame_index}.png")
+        cv2.imwrite(metadata_frame_path, frame)
+        
+        try:
+            metadata_content = lsb.reveal(metadata_frame_path)
+            if metadata_content and ',' in metadata_content:
+                print(f"[INFO] Found metadata at frame {frame_index}: {metadata_content}")
+                try:
+                    frame_nums = [int(num) for num in metadata_content.split(',')]
+                    metadata_frame_numbers = frame_nums
+                    print(f"[INFO] Using frame numbers: {frame_nums}")
+                    break
+                except:
+                    print(f"[INFO] Failed to parse metadata: {metadata_content}")
+        except Exception as e:
+            pass
+    
+    cap.release()
+    cap = cv2.VideoCapture(video_path)
+    
+    frames_to_check = metadata_frame_numbers if metadata_frame_numbers else list(range(15))
+    print(f"[INFO] Will check frames: {frames_to_check}")
+    
+    decoded = {}
+    
+    for frame_number in frames_to_check:
+        if frame_number >= number_of_frames:
+            continue
+            
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        ret, frame = cap.read()
+        if not ret:
+            continue
+        
+        encoded_frame_file_name = os.path.join(temp_dir, f"{frame_number}-enc.png")
+        cv2.imwrite(encoded_frame_file_name, frame)
+        
+        try:
+            clear_message = lsb.reveal(encoded_frame_file_name)
+            if clear_message:
+                decoded[frame_number] = clear_message
+                print(f"Frame {frame_number} DECODED: {clear_message}")
+        except Exception as e:
+            print(f"Error decoding frame {frame_number}: {e}")
+    
+    res = ""
+    for fn in sorted(decoded.keys()):
+        res += decoded[fn]
+    
+    if not res:
+        return None
+    
+    try:
+        decrypted_message = decrypt_rsa(res)
+        return decrypted_message.decode('utf-8')
+    except Exception as e:
+        print(f"Error decrypting message: {e}")
+        return res
+
 def create_output_video(frames, original_video, output_path):
     """Create output video from frames"""
     video = cv2.VideoCapture(original_video)
@@ -171,13 +287,15 @@ def create_output_video(frames, original_video, output_path):
 def health_check():
     return jsonify({"status": "Server is running"})
 
-@app.route('/test-video', methods=['POST'])
-def test_video_processing():
-    """Test endpoint for video processing"""
-    if 'video' not in request.files:
-        return jsonify({"error": "Missing video file"}), 400
+@app.route('/encrypt', methods=['POST'])
+def encrypt_endpoint():
+    """Endpoint to encrypt text and hide it in video"""
+    if 'video' not in request.files or 'text' not in request.form:
+        return jsonify({"error": "Missing video file or text"}), 400
     
     video_file = request.files['video']
+    text = request.form['text']
+    
     if video_file.filename == '':
         return jsonify({"error": "No video selected"}), 400
     
@@ -189,17 +307,44 @@ def test_video_processing():
         video_path = os.path.join(temp_dir, secure_filename(video_file.filename))
         video_file.save(video_path)
         
-        frames, frame_count = extract_frames(video_path, temp_dir)
+        frames, _ = extract_frames(video_path, temp_dir)
+        encrypted_text = encrypt_rsa(text)
+        frame_numbers = encode_frames(frames, encrypted_text, temp_dir)
         
-        return jsonify({
-            "message": "Video processed successfully",
-            "frame_count": frame_count,
-            "session_id": session_id
-        })
+        original_filename = secure_filename(video_file.filename)
+        output_filename = f"encoded_{original_filename.rsplit('.', 1)[0]}.mov"
+        output_path = os.path.join(temp_dir, output_filename)
+        create_output_video(frames, video_path, output_path)
+        
+        with open(output_path, 'rb') as mov_file:
+            mov_data = mov_file.read()
+        
+        response = {
+            "mov": base64.b64encode(mov_data).decode('utf-8'),
+            "mov_filename": output_filename
+        }
+        
+        return jsonify(response)
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+    finally:
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+        except Exception as cleanup_error:
+            print(f"Error cleaning up: {cleanup_error}")
 
-if __name__ == '__main__':
-    generate_keys()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+@app.route('/decrypt', methods=['POST'])
+def decrypt_endpoint():
+    """Endpoint to decrypt hidden text from video"""
+    if 'video' not in request.files or 'text' not in request.form:
+        return jsonify({"error": "Missing video file or text"}), 400
+    
+    video_file = request.files['video']
+    text = request.form['text']
+    
+    if video_file.filename == '':
+        return jsonify({"error": "No video selected"}), 400
+        
