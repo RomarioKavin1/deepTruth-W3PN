@@ -112,7 +112,7 @@ const TestVerifyPage = () => {
                   onChange={(e) =>
                     handleInputChange("verification_level", e.target.value)
                   }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                   placeholder="orb"
                 />
               </div>
@@ -127,7 +127,7 @@ const TestVerifyPage = () => {
                   onChange={(e) =>
                     handleInputChange("credential_type", e.target.value)
                   }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                   placeholder="orb"
                 />
               </div>
@@ -141,7 +141,7 @@ const TestVerifyPage = () => {
                 value={proofData.proof}
                 onChange={(e) => handleInputChange("proof", e.target.value)}
                 rows={3}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 placeholder="0x..."
               />
             </div>
@@ -156,7 +156,7 @@ const TestVerifyPage = () => {
                 onChange={(e) =>
                   handleInputChange("nullifier_hash", e.target.value)
                 }
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 placeholder="0x..."
               />
             </div>
@@ -171,7 +171,7 @@ const TestVerifyPage = () => {
                 onChange={(e) =>
                   handleInputChange("merkle_root", e.target.value)
                 }
-                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 placeholder="0x..."
               />
             </div>
