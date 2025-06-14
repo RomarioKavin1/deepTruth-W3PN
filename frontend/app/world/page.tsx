@@ -22,7 +22,10 @@ const page = () => {
     }
   };
 
-  const onSuccess = () => {
+  const onSuccess = (result: ISuccessResult) => {
+    console.log("Verification successful, redirecting with proof data...");
+    // Store the proof data in sessionStorage to pass to success page
+    sessionStorage.setItem("worldid_proof", JSON.stringify(result));
     window.location.href = "/success";
   };
 
