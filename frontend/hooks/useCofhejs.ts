@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useEffect } from "react";
-import { cofhejs } from "cofhejs/web";
+import { cofhejs, permitStore } from "cofhejs/web";
 import { PublicClient, WalletClient, createWalletClient, http } from "viem";
 import { PrivateKeyAccount, privateKeyToAccount } from "viem/accounts";
 import * as chains from "viem/chains";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { useStore } from "zustand";
+import scaffoldConfig from "../scaffold.config";
 
 const ChainEnvironments = {
   // Ethereum
@@ -37,13 +38,11 @@ function createWalletClientFromPrivateKey(
 
 export const useIsConnectedChainSupported = () => {
   const { chainId } = useAccount();
-  const supportedChains: number[] = [
-    chains.arbitrumSepolia.id,
-    chains.sepolia.id,
-    chains.hardhat.id,
-  ];
   return useMemo(
-    () => (chainId ? supportedChains.includes(chainId) : false),
+    () =>
+      scaffoldConfig.targetNetworks.some(
+        (network: chains.Chain) => network.id === chainId
+      ),
     [chainId]
   );
 };
@@ -51,6 +50,7 @@ export const useIsConnectedChainSupported = () => {
 export function useInitializeCofhejs() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const { isConnected, address } = useAccount();
   const isChainSupported = useIsConnectedChainSupported();
 
   const handleError = (error: string) => {
@@ -59,14 +59,28 @@ export function useInitializeCofhejs() {
 
   useEffect(() => {
     const initializeCofhejs = async () => {
-      if (!publicClient || !walletClient || !isChainSupported) return;
+      if (!publicClient || !walletClient || !isChainSupported || !isConnected) {
+        console.log("CoFHE initialization skipped:", {
+          publicClient: !!publicClient,
+          walletClient: !!walletClient,
+          isChainSupported,
+          isConnected,
+        });
+        return;
+      }
 
-      console.log("Initializing CoFHE...");
+      console.log("Initializing CoFHE...", {
+        chainId: publicClient.chain.id,
+        address,
+        chain: publicClient.chain.name,
+      });
 
-      const chainId = publicClient?.chain.id;
+      const chainId = publicClient.chain.id;
       const environment =
         ChainEnvironments[chainId as keyof typeof ChainEnvironments] ??
         "TESTNET";
+
+      console.log("Using environment:", environment);
 
       const viemZkvSigner = createWalletClientFromPrivateKey(
         publicClient,
@@ -74,6 +88,12 @@ export function useInitializeCofhejs() {
       );
 
       try {
+        console.log("Starting CoFHE initialization with parameters:", {
+          environment,
+          generatePermit: false,
+          mockConfig: { decryptDelay: 1000 },
+        });
+
         const initializationResult = await cofhejs.initializeWithViem({
           viemClient: publicClient,
           viemWalletClient: walletClient,
@@ -87,6 +107,7 @@ export function useInitializeCofhejs() {
 
         if (initializationResult.success) {
           console.log("CoFHE initialized successfully");
+          console.log("CoFHE state:", cofhejs.store.getState());
         } else {
           console.error(
             "CoFHE initialization failed:",
@@ -108,7 +129,7 @@ export function useInitializeCofhejs() {
     };
 
     initializeCofhejs();
-  }, [walletClient, publicClient, isChainSupported]);
+  }, [walletClient, publicClient, isChainSupported, isConnected, address]);
 }
 
 type CofhejsStoreState = ReturnType<typeof cofhejs.store.getState>;
@@ -142,4 +163,40 @@ export const useCofhejsStatus = () => {
     () => ({ chainId, account, initialized }),
     [chainId, account, initialized]
   );
+};
+
+// Permit hooks
+type PermitStoreState = ReturnType<typeof permitStore.store.getState>;
+
+const useCofhejsPermitStore = <T>(selector: (state: PermitStoreState) => T) => {
+  return useStore(permitStore.store, selector);
+};
+
+export const useCofhejsActivePermitHash = () => {
+  const { chainId, account, initialized } = useCofhejsStatus();
+  return useCofhejsPermitStore((state) => {
+    if (!initialized || !chainId || !account) return undefined;
+    return state.activePermitHash?.[chainId]?.[account];
+  });
+};
+
+export const useCofhejsActivePermit = () => {
+  const activePermitHash = useCofhejsActivePermitHash();
+  return useMemo(() => {
+    const permitResult = cofhejs.getPermit(activePermitHash ?? undefined);
+    if (!permitResult) return null;
+    if (permitResult.success) {
+      return permitResult.data;
+    } else {
+      return null;
+    }
+  }, [activePermitHash]);
+};
+
+export const useCofhejsIsActivePermitValid = () => {
+  const permit = useCofhejsActivePermit();
+  return useMemo(() => {
+    if (!permit) return false;
+    return permit.isValid();
+  }, [permit]);
 };

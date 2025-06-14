@@ -7,13 +7,19 @@ import {
   useReadContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   ANONYMITY_TIERS_ADDRESS,
   ANONYMITY_TIERS_ABI,
 } from "@/utils/contractConfig";
 import { FheTypes } from "cofhejs/web";
 import { useEncryptInput } from "@/hooks/useEncryptInput";
-import { useCofhejsInitialized } from "@/hooks/useCofhejs";
+import {
+  useCofhejsInitialized,
+  useCofhejsIsActivePermitValid,
+  useCofhejsActivePermit,
+} from "@/hooks/useCofhejs";
+import { useCofhejsModalStore } from "@/components/CofhejsPermitModal";
 import { EncryptedValue } from "@/components/EncryptedValue";
 
 interface RecordData {
@@ -26,6 +32,11 @@ const ContractPage = () => {
   const { address, isConnected } = useAccount();
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const cofhejsInitialized = useCofhejsInitialized();
+  const isPermitValid = useCofhejsIsActivePermitValid();
+  const activePermit = useCofhejsActivePermit();
+  const setGeneratePermitModalOpen = useCofhejsModalStore(
+    (state) => state.setGeneratePermitModalOpen
+  );
   const { onEncryptInput, isEncryptingInput, inputEncryptionDisabled } =
     useEncryptInput();
 
@@ -90,13 +101,14 @@ const ContractPage = () => {
     try {
       // Convert CID to safe BigInt value
       const worldCidBigInt = cidToBigInt(worldIdProofCid);
+      const worldCidUint32 = Number(worldCidBigInt) >>> 0; // Convert to uint32
 
-      console.log("Converting CID:", { worldCidBigInt });
+      console.log("Converting CID:", { worldCidBigInt, worldCidUint32 });
 
       // Encrypt the input using CoFHE
       const encryptedWorldIdCid = await onEncryptInput(
-        FheTypes.Uint256,
-        worldCidBigInt
+        FheTypes.Uint32,
+        worldIdProofCid
       );
 
       if (!encryptedWorldIdCid) {
@@ -140,12 +152,12 @@ const ContractPage = () => {
       const signatureCidBigInt = cidToBigInt(signatureCid);
 
       const encryptedWorldIdCid = await onEncryptInput(
-        FheTypes.Uint256,
-        worldCidBigInt
+        FheTypes.Uint32,
+        worldCidBigInt.toString()
       );
       const encryptedSignatureCid = await onEncryptInput(
-        FheTypes.Uint256,
-        signatureCidBigInt
+        FheTypes.Uint32,
+        signatureCidBigInt.toString()
       );
 
       if (!encryptedWorldIdCid || !encryptedSignatureCid) {
@@ -197,16 +209,16 @@ const ContractPage = () => {
       const selfVerificationCidBigInt = cidToBigInt(selfVerificationCid);
 
       const encryptedWorldIdCid = await onEncryptInput(
-        FheTypes.Uint256,
-        worldCidBigInt
+        FheTypes.Uint32,
+        worldCidBigInt.toString()
       );
       const encryptedSignatureCid = await onEncryptInput(
-        FheTypes.Uint256,
-        signatureCidBigInt
+        FheTypes.Uint32,
+        signatureCidBigInt.toString()
       );
       const encryptedSelfVerificationCid = await onEncryptInput(
-        FheTypes.Uint256,
-        selfVerificationCidBigInt
+        FheTypes.Uint32,
+        selfVerificationCidBigInt.toString()
       );
 
       if (
@@ -330,7 +342,7 @@ const ContractPage = () => {
           <p className="text-gray-600 mb-6">
             Please connect your wallet to interact with the contract
           </p>
-          <appkit-button />
+          <ConnectButton />
         </div>
       </div>
     );
@@ -348,20 +360,39 @@ const ContractPage = () => {
               </h1>
               <p className="text-gray-600 mb-4">
                 Connected: {address} | Chain: {isConnected ? "✅" : "❌"} |
-                CoFHE: {cofhejsInitialized ? "✅" : "❌"}
+                CoFHE: {cofhejsInitialized ? "✅" : "❌"} | Permit:{" "}
+                {isPermitValid ? "✅" : "❌"}
               </p>
+              {activePermit && (
+                <p className="text-sm text-gray-500 mb-2">
+                  Active Permit: {activePermit.name || "Unnamed"} - Expires:{" "}
+                  {new Date(
+                    Number(activePermit.expiration) * 1000
+                  ).toLocaleDateString()}
+                </p>
+              )}
               {uuidCounter && (
                 <p className="text-sm text-gray-500">
                   Next UUID: anon-{uuidCounter.toString()}
                 </p>
               )}
             </div>
-            <button
-              onClick={populateTestData}
-              className="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700"
-            >
-              Load Test Data
-            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={populateTestData}
+                className="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700"
+              >
+                Load Test Data
+              </button>
+              <button
+                onClick={() => setGeneratePermitModalOpen(true)}
+                disabled={!cofhejsInitialized}
+                className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Generate Permit
+              </button>
+              <ConnectButton />
+            </div>
           </div>
           {txStatus && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
@@ -370,275 +401,197 @@ const ContractPage = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Write Functions */}
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-              Write Functions
-            </h2>
-
-            {/* Create Anonymous Record */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-semibold mb-4">
-                Create Anonymous Record
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    World ID Proof CID
-                  </label>
-                  <input
-                    type="text"
-                    value={worldIdProofCid}
-                    onChange={(e) => setWorldIdProofCid(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="QmExample123..."
-                  />
-                </div>
-                <button
-                  onClick={createAnonymousRecord}
-                  disabled={pending || inputEncryptionDisabled}
-                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {pending ? "Processing..." : "Create Anonymous Record"}
-                </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Create Anonymous Record */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-xl font-semibold mb-4">
+              Create Anonymous Record
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  World ID Proof CID
+                </label>
+                <input
+                  type="text"
+                  value={worldIdProofCid}
+                  onChange={(e) => setWorldIdProofCid(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="QmWorldId123..."
+                />
               </div>
-            </div>
-
-            {/* Create Pseudonymous Record */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-semibold mb-4">
-                Create Pseudonymous Record
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    World ID Proof CID
-                  </label>
-                  <input
-                    type="text"
-                    value={worldIdProofCid}
-                    onChange={(e) => setWorldIdProofCid(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="QmExample123..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Signature CID
-                  </label>
-                  <input
-                    type="text"
-                    value={signatureCid}
-                    onChange={(e) => setSignatureCid(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="QmSignature123..."
-                  />
-                </div>
-                <button
-                  onClick={createPseudonymousRecord}
-                  disabled={pending || inputEncryptionDisabled}
-                  className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {pending ? "Processing..." : "Create Pseudonymous Record"}
-                </button>
-              </div>
-            </div>
-
-            {/* Create Identity Record */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-semibold mb-4">
-                Create Identity Record
-              </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    World ID Proof CID
-                  </label>
-                  <input
-                    type="text"
-                    value={worldIdProofCid}
-                    onChange={(e) => setWorldIdProofCid(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="QmExample123..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Signature CID
-                  </label>
-                  <input
-                    type="text"
-                    value={signatureCid}
-                    onChange={(e) => setSignatureCid(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="QmSignature123..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Self Verification Proof CID
-                  </label>
-                  <input
-                    type="text"
-                    value={selfVerificationCid}
-                    onChange={(e) => setSelfVerificationCid(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="QmSelfVerify123..."
-                  />
-                </div>
-                <button
-                  onClick={createIdentityRecord}
-                  disabled={pending || inputEncryptionDisabled}
-                  className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {pending ? "Processing..." : "Create Identity Record"}
-                </button>
-              </div>
+              <button
+                onClick={createAnonymousRecord}
+                disabled={pending || inputEncryptionDisabled}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {pending ? "Processing..." : "Create Anonymous Record"}
+              </button>
             </div>
           </div>
 
-          {/* Read Functions */}
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Read Functions</h2>
+          {/* Create Pseudonymous Record */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-xl font-semibold mb-4">
+              Create Pseudonymous Record
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  World ID Proof CID
+                </label>
+                <input
+                  type="text"
+                  value={worldIdProofCid}
+                  onChange={(e) => setWorldIdProofCid(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="QmWorldId123..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Signature CID
+                </label>
+                <input
+                  type="text"
+                  value={signatureCid}
+                  onChange={(e) => setSignatureCid(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="QmSignature789..."
+                />
+              </div>
+              <button
+                onClick={createPseudonymousRecord}
+                disabled={pending || inputEncryptionDisabled}
+                className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {pending ? "Processing..." : "Create Pseudonymous Record"}
+              </button>
+            </div>
+          </div>
 
-            {/* Query Section */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-semibold mb-4">Query Records</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    UUID to Query
-                  </label>
-                  <input
-                    type="text"
-                    value={queryUuid}
-                    onChange={(e) => setQueryUuid(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="anon-1"
-                  />
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <button
-                    onClick={queryAnonymousRecord}
-                    className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
-                  >
-                    Query Anonymous Record
-                  </button>
-                  <button
-                    onClick={queryPseudonymousRecord}
-                    className="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
-                  >
-                    Query Pseudonymous Record
-                  </button>
-                  <button
-                    onClick={queryIdentityRecord}
-                    className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700"
-                  >
-                    Query Identity Record
-                  </button>
-                </div>
+          {/* Create Identity Record */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-xl font-semibold mb-4">
+              Create Identity Record
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  World ID Proof CID
+                </label>
+                <input
+                  type="text"
+                  value={worldIdProofCid}
+                  onChange={(e) => setWorldIdProofCid(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="QmWorldId123..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Signature CID
+                </label>
+                <input
+                  type="text"
+                  value={signatureCid}
+                  onChange={(e) => setSignatureCid(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="QmSignature789..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Self Verification Proof CID
+                </label>
+                <input
+                  type="text"
+                  value={selfVerificationCid}
+                  onChange={(e) => setSelfVerificationCid(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="QmSelfVerify012..."
+                />
+              </div>
+              <button
+                onClick={createIdentityRecord}
+                disabled={pending || inputEncryptionDisabled}
+                className="w-full bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {pending ? "Processing..." : "Create Identity Record"}
+              </button>
+            </div>
+          </div>
+
+          {/* Query Records */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-xl font-semibold mb-4">Query Records</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  UUID
+                </label>
+                <input
+                  type="text"
+                  value={queryUuid}
+                  onChange={(e) => setQueryUuid(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="anon-1"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={queryAnonymousRecord}
+                  className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700"
+                >
+                  Query Anonymous
+                </button>
+                <button
+                  onClick={queryPseudonymousRecord}
+                  className="flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700"
+                >
+                  Query Pseudonymous
+                </button>
+                <button
+                  onClick={queryIdentityRecord}
+                  className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700"
+                >
+                  Query Identity
+                </button>
               </div>
             </div>
-
-            {/* Results */}
-            {anonymousRecord && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-xl font-semibold mb-4">Anonymous Record</h3>
-                <div className="space-y-4">
-                  <p>
-                    <strong>Exists:</strong>{" "}
-                    {anonymousRecord.exists ? "Yes" : "No"}
-                  </p>
-                  {anonymousRecord.exists && (
-                    <>
-                      <div className="space-y-2">
-                        <EncryptedValue
-                          fheType={FheTypes.Uint256}
-                          ctHash={anonymousRecord.encryptedWorldIdProofCid}
-                          label="World ID Proof CID"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {pseudonymousRecord && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-xl font-semibold mb-4">
-                  Pseudonymous Record
-                </h3>
-                <div className="space-y-4">
-                  <p>
-                    <strong>Exists:</strong>{" "}
-                    {pseudonymousRecord.exists ? "Yes" : "No"}
-                  </p>
-                  {pseudonymousRecord.exists && (
-                    <>
-                      <p>
-                        <strong>User Address:</strong>{" "}
-                        {pseudonymousRecord.userAddress}
-                      </p>
-                      <div className="space-y-2">
-                        <EncryptedValue
-                          fheType={FheTypes.Uint256}
-                          ctHash={pseudonymousRecord.encryptedWorldIdProofCid}
-                          label="World ID Proof CID"
-                        />
-                        <EncryptedValue
-                          fheType={FheTypes.Uint256}
-                          ctHash={pseudonymousRecord.encryptedSignatureCid}
-                          label="Signature CID"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {identityRecord && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-xl font-semibold mb-4">Identity Record</h3>
-                <div className="space-y-4">
-                  <p>
-                    <strong>Exists:</strong>{" "}
-                    {identityRecord.exists ? "Yes" : "No"}
-                  </p>
-                  {identityRecord.exists && (
-                    <>
-                      <p>
-                        <strong>User Address:</strong>{" "}
-                        {identityRecord.userAddress}
-                      </p>
-                      <div className="space-y-2">
-                        <EncryptedValue
-                          fheType={FheTypes.Uint256}
-                          ctHash={identityRecord.encryptedWorldIdProofCid}
-                          label="World ID Proof CID"
-                        />
-                        <EncryptedValue
-                          fheType={FheTypes.Uint256}
-                          ctHash={identityRecord.encryptedSignatureCid}
-                          label="Signature CID"
-                        />
-                        <EncryptedValue
-                          fheType={FheTypes.Uint256}
-                          ctHash={
-                            identityRecord.encryptedSelfVerificationProofCid
-                          }
-                          label="Self Verification Proof CID"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Results */}
+        {(anonymousRecord || pseudonymousRecord || identityRecord) && (
+          <div className="mt-8 bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-xl font-semibold mb-4">Query Results</h3>
+            {anonymousRecord && (
+              <div className="mb-4">
+                <h4 className="font-medium mb-2">Anonymous Record:</h4>
+                <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto">
+                  {JSON.stringify(anonymousRecord, null, 2)}
+                </pre>
+              </div>
+            )}
+            {pseudonymousRecord && (
+              <div className="mb-4">
+                <h4 className="font-medium mb-2">Pseudonymous Record:</h4>
+                <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto">
+                  {JSON.stringify(pseudonymousRecord, null, 2)}
+                </pre>
+              </div>
+            )}
+            {identityRecord && (
+              <div className="mb-4">
+                <h4 className="font-medium mb-2">Identity Record:</h4>
+                <pre className="bg-gray-100 p-3 rounded-md text-sm overflow-x-auto">
+                  {JSON.stringify(identityRecord, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

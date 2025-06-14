@@ -14,6 +14,10 @@ import {
   cofhejs,
 } from "cofhejs/web";
 
+/**
+ * Type mapping from FHE types to their corresponding Encryptable types.
+ * This type ensures type safety when working with different FHE data types.
+ */
 type EncryptableFromFheTypes<T extends FheTypes> = T extends FheTypes.Bool
   ? EncryptableBool
   : T extends FheTypes.Uint8
@@ -32,8 +36,19 @@ type EncryptableFromFheTypes<T extends FheTypes> = T extends FheTypes.Bool
   ? EncryptableAddress
   : never;
 
+/**
+ * Type representing the input data type for a given FHE type.
+ * This maps FHE types to their corresponding input data types (e.g., boolean for Bool, string/bigint for Uint types).
+ */
 type EncryptableInput<T extends FheTypes> = EncryptableFromFheTypes<T>["data"];
 
+/**
+ * Converts a value to its corresponding Encryptable type based on the specified FHE type.
+ * @param fheType - The FHE type to convert to (e.g., FheTypes.Bool, FheTypes.Uint32)
+ * @param value - The value to convert, must match the expected input type for the FHE type
+ * @returns An Encryptable instance of the specified type
+ * @throws Error if the FHE type is not supported
+ */
 const fheTypeToEncryptable = <T extends FheTypes>(
   fheType: T,
   value: EncryptableInput<T>
@@ -74,6 +89,26 @@ const fheTypeToEncryptable = <T extends FheTypes>(
   }
 };
 
+/**
+ * A React hook that provides functionality for encrypting input values using FHE.
+ * This hook manages the encryption state and provides a type-safe way to encrypt different FHE data types.
+ *
+ * @returns An object containing:
+ *   - onEncryptInput: A function to encrypt input values
+ *   - isEncryptingInput: A boolean indicating if encryption is in progress
+ *   - inputEncryptionDisabled: A boolean indicating if encryption is disabled (when cofhejs is not initialized)
+ *
+ * @example
+ * ```typescript
+ * const { onEncryptInput, isEncryptingInput } = useEncryptInput();
+ *
+ * // Encrypt a uint32 value
+ * const encryptedValue = await onEncryptInput(FheTypes.Uint32, 42);
+ *
+ * // Encrypt a boolean value
+ * const encryptedBool = await onEncryptInput(FheTypes.Bool, true);
+ * ```
+ */
 export const useEncryptInput = () => {
   const [isEncryptingInput, setIsEncryptingInput] = useState(false);
   const initialized = useCofhejsInitialized();
@@ -83,38 +118,25 @@ export const useEncryptInput = () => {
       fheType: T,
       value: E
     ) => {
-      if (!initialized) {
-        console.error("CoFHE not initialized");
+      if (!initialized) return;
+
+      console.log(`ENCRYPTING INPUT | ${fheType} | ${value}`);
+
+      const encryptable = fheTypeToEncryptable<T>(fheType, value);
+
+      setIsEncryptingInput(true);
+      const encryptedResult = await cofhejs.encrypt([encryptable]);
+      setIsEncryptingInput(false);
+
+      if (!encryptedResult.success) {
+        console.error(`FAILED | error = ${encryptedResult.error}`);
         return;
       }
 
-      console.log(`Encrypting input: ${value}`);
-      console.log(`FHE Type: ${fheType}`);
-      console.log(`Value type: ${typeof value}`);
+      const encryptedValue = encryptedResult.data[0];
+      console.log(`SUCCESS | ${fheType} | ${value} => encrypted`);
 
-      try {
-        const encryptable = fheTypeToEncryptable<T>(fheType, value);
-        console.log(`Created encryptable:`, encryptable);
-
-        setIsEncryptingInput(true);
-        const encryptedResult = await cofhejs.encrypt([encryptable]);
-        setIsEncryptingInput(false);
-
-        if (!encryptedResult.success) {
-          console.error(`Failed to encrypt input: ${encryptedResult.error}`);
-          console.error(`Error details:`, encryptedResult.error);
-          return;
-        }
-
-        const encryptedValue = encryptedResult.data[0];
-        console.log(`Encryption successful`);
-
-        return encryptedValue;
-      } catch (error) {
-        setIsEncryptingInput(false);
-        console.error(`Encryption threw error:`, error);
-        return;
-      }
+      return encryptedValue;
     },
     [initialized]
   );

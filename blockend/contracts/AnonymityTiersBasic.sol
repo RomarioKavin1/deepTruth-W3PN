@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "@fhenixprotocol/cofhe-contracts/FHE.sol";
-
-contract AnonymityTiers {
-    using FHE for euint32;
-    using FHE for ebool;
-
+contract AnonymityTiersBasic {
     // Events
     event AnonymousRecordCreated(string indexed uuid, address indexed user);
     event PseudonymousUpgrade(string indexed uuid, address indexed user);
@@ -14,23 +9,23 @@ contract AnonymityTiers {
 
     // Data structures for the three tiers
     struct AnonymousData {
-        euint32 worldProofCid;      // Encrypted CID for World ID proof
+        string worldProofCid;      // Plain text CID for World ID proof
         uint256 timestamp;
         bool exists;
     }
 
     struct PseudonymousData {
-        euint32 worldProofCid;      // Same as anonymous
-        euint32 signatureCid;       // Encrypted CID for signature
-        address userAddress;         // Public user address
+        string worldProofCid;      // Same as anonymous
+        string signatureCid;       // Plain text CID for signature
+        address userAddress;       // Public user address
         uint256 timestamp;
         bool exists;
     }
 
     struct IdentityData {
-        euint32 worldProofCid;      // Same as previous tiers
-        euint32 signatureCid;       // Same as pseudonymous
-        euint32 selfProofCid;       // Encrypted CID for self-verification proof
+        string worldProofCid;      // Same as previous tiers
+        string signatureCid;       // Same as pseudonymous
+        string selfProofCid;       // Plain text CID for self-verification proof
         address userAddress;         
         uint256 timestamp;
         bool exists;
@@ -92,23 +87,18 @@ contract AnonymityTiers {
         return string(buffer);
     }
 
-    // Tier 1: Anonymous - Store encrypted World ID proof CID
+    // Tier 1: Anonymous - Store plain text World ID proof
     function createAnonymousRecord(
-        InEuint32 memory encryptedWorldProofCid
+        string memory worldProofCid
     ) external returns (string memory uuid) {
-        // Convert input to encrypted type
-        euint32 worldCid = FHE.asEuint32(encryptedWorldProofCid);
-        
-        // Set permissions
-        FHE.allowThis(worldCid);
-        FHE.allowSender(worldCid);
+        require(bytes(worldProofCid).length > 0, "World proof CID cannot be empty");
         
         // Generate UUID
         uuid = generateUUID();
         
         // Store anonymous record
         anonymousRecords[uuid] = AnonymousData({
-            worldProofCid: worldCid,
+            worldProofCid: worldProofCid,
             timestamp: block.timestamp,
             exists: true
         });
@@ -119,25 +109,18 @@ contract AnonymityTiers {
 
     // Tier 2: Pseudonymous - Create with world CID and signature CID
     function createPseudonymousRecord(
-        InEuint32 memory encryptedWorldProofCid,
-        InEuint32 memory encryptedSignatureCid
+        string memory worldProofCid,
+        string memory signatureCid
     ) external returns (string memory uuid) {
-        // Convert inputs to encrypted types
-        euint32 worldCid = FHE.asEuint32(encryptedWorldProofCid);
-        euint32 signatureCid = FHE.asEuint32(encryptedSignatureCid);
-        
-        // Set permissions
-        FHE.allowThis(worldCid);
-        FHE.allowThis(signatureCid);
-        FHE.allowSender(worldCid);
-        FHE.allowSender(signatureCid);
+        require(bytes(worldProofCid).length > 0, "World proof CID cannot be empty");
+        require(bytes(signatureCid).length > 0, "Signature CID cannot be empty");
         
         // Generate UUID
         uuid = generateUUID();
         
         // Create pseudonymous record
         pseudonymousRecords[uuid] = PseudonymousData({
-            worldProofCid: worldCid,
+            worldProofCid: worldProofCid,
             signatureCid: signatureCid,
             userAddress: msg.sender,
             timestamp: block.timestamp,
@@ -153,29 +136,20 @@ contract AnonymityTiers {
 
     // Tier 3: Identity - Create with world CID, signature CID, and self-verification CID
     function createIdentityRecord(
-        InEuint32 memory encryptedWorldProofCid,
-        InEuint32 memory encryptedSignatureCid,
-        InEuint32 memory encryptedSelfProofCid
+        string memory worldProofCid,
+        string memory signatureCid,
+        string memory selfProofCid
     ) external returns (string memory uuid) {
-        // Convert inputs to encrypted types
-        euint32 worldCid = FHE.asEuint32(encryptedWorldProofCid);
-        euint32 signatureCid = FHE.asEuint32(encryptedSignatureCid);
-        euint32 selfProofCid = FHE.asEuint32(encryptedSelfProofCid);
-        
-        // Set permissions
-        FHE.allowThis(worldCid);
-        FHE.allowThis(signatureCid);
-        FHE.allowThis(selfProofCid);
-        FHE.allowSender(worldCid);
-        FHE.allowSender(signatureCid);
-        FHE.allowSender(selfProofCid);
+        require(bytes(worldProofCid).length > 0, "World proof CID cannot be empty");
+        require(bytes(signatureCid).length > 0, "Signature CID cannot be empty");
+        require(bytes(selfProofCid).length > 0, "Self proof CID cannot be empty");
         
         // Generate UUID
         uuid = generateUUID();
         
         // Create identity record
         identityRecords[uuid] = IdentityData({
-            worldProofCid: worldCid,
+            worldProofCid: worldProofCid,
             signatureCid: signatureCid,
             selfProofCid: selfProofCid,
             userAddress: msg.sender,
@@ -190,13 +164,13 @@ contract AnonymityTiers {
         return uuid;
     }
 
-    // Query functions with proper FHE permissions
+    // Query functions
     function getAnonymousRecord(string memory uuid) 
         external 
         view 
         validUUID(uuid) 
         returns (
-            euint32 worldProofCid,
+            string memory worldProofCid,
             uint256 timestamp,
             bool exists
         ) 
@@ -216,8 +190,8 @@ contract AnonymityTiers {
         view 
         validUUID(uuid) 
         returns (
-            euint32 worldProofCid,
-            euint32 signatureCid,
+            string memory worldProofCid,
+            string memory signatureCid,
             address userAddress,
             uint256 timestamp,
             bool exists
@@ -240,9 +214,9 @@ contract AnonymityTiers {
         view 
         validUUID(uuid) 
         returns (
-            euint32 worldProofCid,
-            euint32 signatureCid,
-            euint32 selfProofCid,
+            string memory worldProofCid,
+            string memory signatureCid,
+            string memory selfProofCid,
             address userAddress,
             uint256 timestamp,
             bool exists
@@ -271,5 +245,69 @@ contract AnonymityTiers {
         if (pseudonymousRecords[uuid].exists) return 2;
         if (anonymousRecords[uuid].exists) return 1;
         return 0; // Doesn't exist
+    }
+
+    // Additional utility functions for the basic version
+    
+    // Get all anonymous record UUIDs (for testing/demo purposes)
+    function getAllAnonymousUUIDs() external view returns (string[] memory) {
+        // Note: This is not gas-efficient for large datasets
+        // In production, you'd want to implement pagination
+        string[] memory uuids = new string[](uuidCounter);
+        uint256 count = 0;
+        
+        for (uint256 i = 1; i < uuidCounter; i++) {
+            string memory uuid = string(abi.encodePacked("anon-", toString(i)));
+            if (anonymousRecords[uuid].exists) {
+                uuids[count] = uuid;
+                count++;
+            }
+        }
+        
+        // Resize array to actual count
+        string[] memory result = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            result[i] = uuids[i];
+        }
+        
+        return result;
+    }
+
+    // Get total number of records by tier
+    function getRecordCounts() external view returns (uint256 anonymousCount, uint256 pseudonymousCount, uint256 identityCount) {
+        for (uint256 i = 1; i < uuidCounter; i++) {
+            string memory uuid = string(abi.encodePacked("anon-", toString(i)));
+            if (identityRecords[uuid].exists) {
+                identityCount++;
+            } else if (pseudonymousRecords[uuid].exists) {
+                pseudonymousCount++;
+            } else if (anonymousRecords[uuid].exists) {
+                anonymousCount++;
+            }
+        }
+    }
+
+    // Update functions (only for record owners)
+    function updatePseudonymousRecord(
+        string memory uuid,
+        string memory newSignatureCid
+    ) external onlyRecordOwner(uuid) {
+        require(pseudonymousRecords[uuid].exists, "Record not found");
+        require(bytes(newSignatureCid).length > 0, "Signature CID cannot be empty");
+        
+        pseudonymousRecords[uuid].signatureCid = newSignatureCid;
+    }
+
+    function updateIdentityRecord(
+        string memory uuid,
+        string memory newSignatureCid,
+        string memory newSelfProofCid
+    ) external onlyRecordOwner(uuid) {
+        require(identityRecords[uuid].exists, "Record not found");
+        require(bytes(newSignatureCid).length > 0, "Signature CID cannot be empty");
+        require(bytes(newSelfProofCid).length > 0, "Self proof CID cannot be empty");
+        
+        identityRecords[uuid].signatureCid = newSignatureCid;
+        identityRecords[uuid].selfProofCid = newSelfProofCid;
     }
 } 
