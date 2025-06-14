@@ -15,7 +15,6 @@ contract AnonymityTiers {
     // Data structures for the three tiers
     struct AnonymousData {
         euint256 worldProofCid;      // Encrypted CID for World ID proof
-        euint256 nullifierHash;      // Keep nullifier hash encrypted for uniqueness
         uint256 timestamp;
         bool exists;
     }
@@ -23,7 +22,6 @@ contract AnonymityTiers {
     struct PseudonymousData {
         euint256 worldProofCid;      // Same as anonymous
         euint256 signatureCid;       // Encrypted CID for signature
-        euint256 nullifierHash;      
         address userAddress;         // Public user address
         uint256 timestamp;
         bool exists;
@@ -33,7 +31,6 @@ contract AnonymityTiers {
         euint256 worldProofCid;      // Same as previous tiers
         euint256 signatureCid;       // Same as pseudonymous
         euint256 selfProofCid;       // Encrypted CID for self-verification proof
-        euint256 nullifierHash;      
         address userAddress;         
         uint256 timestamp;
         bool exists;
@@ -97,20 +94,14 @@ contract AnonymityTiers {
 
     // Tier 1: Anonymous - Store encrypted World ID proof CID
     function createAnonymousRecord(
-        InEuint256 memory encryptedWorldProofCid,
-        InEuint256 memory encryptedNullifierHash
+        InEuint256 memory encryptedWorldProofCid
     ) external returns (string memory uuid) {
-        // Convert inputs to encrypted types
+        // Convert input to encrypted type
         euint256 worldCid = FHE.asEuint256(encryptedWorldProofCid);
-        euint256 nullifier = FHE.asEuint256(encryptedNullifierHash);
         
         // Set permissions
         FHE.allowThis(worldCid);
-        FHE.allowThis(nullifier);
         FHE.allowSender(worldCid);
-        FHE.allowSender(nullifier);
-        
-        // Nullifier reuse is allowed - no uniqueness check
         
         // Generate UUID
         uuid = generateUUID();
@@ -118,7 +109,6 @@ contract AnonymityTiers {
         // Store anonymous record
         anonymousRecords[uuid] = AnonymousData({
             worldProofCid: worldCid,
-            nullifierHash: nullifier,
             timestamp: block.timestamp,
             exists: true
         });
@@ -127,25 +117,28 @@ contract AnonymityTiers {
         return uuid;
     }
 
-    // Tier 2: Pseudonymous - Add signature CID, reveal user address
-    function upgradeToPseudonymous(
-        string memory uuid,
+    // Tier 2: Pseudonymous - Create with world CID and signature CID
+    function createPseudonymousRecord(
+        InEuint256 memory encryptedWorldProofCid,
         InEuint256 memory encryptedSignatureCid
-    ) external validUUID(uuid) {
-        require(anonymousRecords[uuid].exists, "Anonymous record not found");
-        require(!pseudonymousRecords[uuid].exists, "Already pseudonymous");
-        
+    ) external returns (string memory uuid) {
+        // Convert inputs to encrypted types
+        euint256 worldCid = FHE.asEuint256(encryptedWorldProofCid);
         euint256 signatureCid = FHE.asEuint256(encryptedSignatureCid);
+        
+        // Set permissions
+        FHE.allowThis(worldCid);
         FHE.allowThis(signatureCid);
+        FHE.allowSender(worldCid);
         FHE.allowSender(signatureCid);
         
-        AnonymousData memory anonData = anonymousRecords[uuid];
+        // Generate UUID
+        uuid = generateUUID();
         
         // Create pseudonymous record
         pseudonymousRecords[uuid] = PseudonymousData({
-            worldProofCid: anonData.worldProofCid,
+            worldProofCid: worldCid,
             signatureCid: signatureCid,
-            nullifierHash: anonData.nullifierHash,
             userAddress: msg.sender,
             timestamp: block.timestamp,
             exists: true
@@ -155,34 +148,46 @@ contract AnonymityTiers {
         userUUIDs[msg.sender].push(uuid);
         
         emit PseudonymousUpgrade(uuid, msg.sender);
+        return uuid;
     }
 
-    // Tier 3: Identity - Add self-verification proof CID
-    function upgradeToIdentity(
-        string memory uuid,
+    // Tier 3: Identity - Create with world CID, signature CID, and self-verification CID
+    function createIdentityRecord(
+        InEuint256 memory encryptedWorldProofCid,
+        InEuint256 memory encryptedSignatureCid,
         InEuint256 memory encryptedSelfProofCid
-    ) external validUUID(uuid) onlyRecordOwner(uuid) {
-        require(pseudonymousRecords[uuid].exists, "Pseudonymous record not found");
-        require(!identityRecords[uuid].exists, "Already identity");
-        
+    ) external returns (string memory uuid) {
+        // Convert inputs to encrypted types
+        euint256 worldCid = FHE.asEuint256(encryptedWorldProofCid);
+        euint256 signatureCid = FHE.asEuint256(encryptedSignatureCid);
         euint256 selfProofCid = FHE.asEuint256(encryptedSelfProofCid);
+        
+        // Set permissions
+        FHE.allowThis(worldCid);
+        FHE.allowThis(signatureCid);
         FHE.allowThis(selfProofCid);
+        FHE.allowSender(worldCid);
+        FHE.allowSender(signatureCid);
         FHE.allowSender(selfProofCid);
         
-        PseudonymousData memory pseudoData = pseudonymousRecords[uuid];
+        // Generate UUID
+        uuid = generateUUID();
         
         // Create identity record
         identityRecords[uuid] = IdentityData({
-            worldProofCid: pseudoData.worldProofCid,
-            signatureCid: pseudoData.signatureCid,
+            worldProofCid: worldCid,
+            signatureCid: signatureCid,
             selfProofCid: selfProofCid,
-            nullifierHash: pseudoData.nullifierHash,
-            userAddress: pseudoData.userAddress,
+            userAddress: msg.sender,
             timestamp: block.timestamp,
             exists: true
         });
         
+        // Track user's UUIDs
+        userUUIDs[msg.sender].push(uuid);
+        
         emit IdentityUpgrade(uuid, msg.sender);
+        return uuid;
     }
 
     // Query functions with proper FHE permissions
@@ -192,7 +197,6 @@ contract AnonymityTiers {
         validUUID(uuid) 
         returns (
             euint256 worldProofCid,
-            euint256 nullifierHash,
             uint256 timestamp,
             bool exists
         ) 
@@ -202,7 +206,6 @@ contract AnonymityTiers {
         
         return (
             record.worldProofCid,
-            record.nullifierHash,
             record.timestamp,
             record.exists
         );
@@ -215,7 +218,6 @@ contract AnonymityTiers {
         returns (
             euint256 worldProofCid,
             euint256 signatureCid,
-            euint256 nullifierHash,
             address userAddress,
             uint256 timestamp,
             bool exists
@@ -227,7 +229,6 @@ contract AnonymityTiers {
         return (
             record.worldProofCid,
             record.signatureCid,
-            record.nullifierHash,
             record.userAddress,
             record.timestamp,
             record.exists
@@ -242,7 +243,6 @@ contract AnonymityTiers {
             euint256 worldProofCid,
             euint256 signatureCid,
             euint256 selfProofCid,
-            euint256 nullifierHash,
             address userAddress,
             uint256 timestamp,
             bool exists
@@ -255,7 +255,6 @@ contract AnonymityTiers {
             record.worldProofCid,
             record.signatureCid,
             record.selfProofCid,
-            record.nullifierHash,
             record.userAddress,
             record.timestamp,
             record.exists
