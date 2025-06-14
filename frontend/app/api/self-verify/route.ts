@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
       // 2. Save user verification status to database
       // 3. Associate verification with user account
 
-      // Return successful verification response
+      // Return successful verification response with original proof data
       return NextResponse.json({
         status: "success",
         result: true,
@@ -66,6 +66,11 @@ export async function POST(req: NextRequest) {
         nullifier: result.nullifier,
         credentialSubject: result.credentialSubject,
         verificationDetails: result.isValidDetails,
+        // Include the original proof data that was sent to this API
+        originalProof: {
+          proof: proof,
+          publicSignals: publicSignals,
+        },
       });
     } else {
       console.log("❌ Verification failed:");
