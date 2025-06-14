@@ -9,6 +9,11 @@ const SelfSuccessPage = () => {
   const [proofData, setProofData] = useState<SelfProofData | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    cid: string;
+    url: string;
+  } | null>(null);
 
   useEffect(() => {
     // Retrieve proof data from sessionStorage
@@ -60,6 +65,40 @@ const SelfSuccessPage = () => {
 
   const goBack = () => {
     window.location.href = "/self";
+  };
+
+  const uploadToIPFS = async () => {
+    if (!proofData) {
+      alert("No proof data to upload");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const response = await fetch("/api/upload-proof", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          proofData: proofData,
+          type: "self",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const result = await response.json();
+      setUploadResult(result);
+      console.log("Upload successful:", result);
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Failed to upload proof to IPFS");
+    } finally {
+      setUploading(false);
+    }
   };
 
   if (loading) {
@@ -234,12 +273,51 @@ const SelfSuccessPage = () => {
                 </button>
 
                 <button
+                  onClick={uploadToIPFS}
+                  disabled={uploading}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-6 py-2 rounded-md transition-colors"
+                >
+                  {uploading ? "Uploading..." : "Upload to IPFS"}
+                </button>
+
+                <button
                   onClick={clearData}
                   className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-md transition-colors"
                 >
                   Clear Data
                 </button>
               </div>
+
+              {uploadResult && (
+                <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-green-800 mb-2">
+                    🎉 Successfully Uploaded to IPFS!
+                  </h3>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-sm font-medium text-green-700 mb-1">
+                        CID
+                      </label>
+                      <p className="text-sm bg-white p-2 rounded border font-mono break-all">
+                        {uploadResult.cid}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-green-700 mb-1">
+                        IPFS URL
+                      </label>
+                      <a
+                        href={uploadResult.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm bg-white p-2 rounded border block break-all text-blue-600 hover:text-blue-800 underline"
+                      >
+                        {uploadResult.url}
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8">
