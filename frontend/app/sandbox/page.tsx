@@ -21,6 +21,7 @@ export default function SandboxPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedVideo, setProcessedVideo] = useState<string | null>(null);
   const [processedFilename, setProcessedFilename] = useState<string>("");
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
 
   // Verification states
   const [verifyFile, setVerifyFile] = useState<File | null>(null);
@@ -49,6 +50,15 @@ export default function SandboxPage() {
     return cleanup;
   }, []);
 
+  // Handle stream setup when stream changes
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      console.log("Stream available, setting up video element...");
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(console.error);
+    }
+  }, [stream]);
+
   // Recording timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -61,23 +71,34 @@ export default function SandboxPage() {
   }, [isRecording]);
 
   const startCamera = async () => {
+    setIsCameraLoading(true);
     try {
+      console.log("Requesting camera access...");
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 },
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: "user",
+        },
         audio: true,
       });
 
+      console.log("Camera access granted, setting stream...");
       setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
     } catch (error) {
       console.error("Error accessing camera:", error);
+      alert(
+        "Failed to access camera. Please check permissions and make sure you're using HTTPS."
+      );
+      setStream(null);
+    } finally {
+      setIsCameraLoading(false);
     }
   };
 
   const stopCamera = () => {
     cleanup();
+    setIsCameraLoading(false);
   };
 
   const startRecording = async () => {
@@ -320,7 +341,7 @@ export default function SandboxPage() {
                 🎥 VIDEO RECORDING
               </h2>
 
-              {!stream ? (
+              {!stream && !isCameraLoading ? (
                 <div className="text-center py-8">
                   <Button
                     onClick={startCamera}
@@ -328,6 +349,15 @@ export default function SandboxPage() {
                   >
                     START CAMERA
                   </Button>
+                </div>
+              ) : isCameraLoading ? (
+                <div className="text-center py-8">
+                  <div className="text-lg font-bold mb-4">
+                    📹 STARTING CAMERA...
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Please allow camera access when prompted
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -338,7 +368,22 @@ export default function SandboxPage() {
                       autoPlay
                       muted
                       playsInline
-                      className="w-full max-w-2xl border-4 border-black"
+                      width="640"
+                      height="480"
+                      className="w-full max-w-2xl border-4 border-black bg-black"
+                      onLoadedMetadata={() => {
+                        console.log("Video metadata loaded");
+                        if (videoRef.current) {
+                          console.log(
+                            "Video dimensions:",
+                            videoRef.current.videoWidth,
+                            "x",
+                            videoRef.current.videoHeight
+                          );
+                        }
+                      }}
+                      onPlay={() => console.log("Video started playing")}
+                      onError={(e) => console.error("Video error:", e)}
                     />
                     {isRecording && (
                       <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1 font-bold text-sm">
