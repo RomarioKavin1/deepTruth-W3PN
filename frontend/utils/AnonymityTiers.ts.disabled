@@ -14,14 +14,6 @@ import type {
   ContractMethod,
   Listener,
 } from "ethers";
-import type {
-  TypedContractEvent,
-  TypedDeferredTopicFilter,
-  TypedEventLog,
-  TypedLogDescription,
-  TypedListener,
-  TypedContractMethod,
-} from "../common";
 
 export type InEuint256Struct = {
   ctHash: BigNumberish;
@@ -360,9 +352,7 @@ export interface AnonymityTiers extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
-  getFunction(
-    nameOrSignature: "anonymousRecords"
-  ): TypedContractMethod<
+  getFunction(nameOrSignature: "anonymousRecords"): TypedContractMethod<
     [arg0: string],
     [
       [bigint, bigint, boolean] & {
@@ -404,9 +394,7 @@ export interface AnonymityTiers extends BaseContract {
     [string],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "getAnonymousRecord"
-  ): TypedContractMethod<
+  getFunction(nameOrSignature: "getAnonymousRecord"): TypedContractMethod<
     [uuid: string],
     [
       [bigint, bigint, boolean] & {
@@ -417,9 +405,7 @@ export interface AnonymityTiers extends BaseContract {
     ],
     "view"
   >;
-  getFunction(
-    nameOrSignature: "getIdentityRecord"
-  ): TypedContractMethod<
+  getFunction(nameOrSignature: "getIdentityRecord"): TypedContractMethod<
     [uuid: string],
     [
       [bigint, bigint, bigint, string, bigint, boolean] & {
@@ -433,9 +419,7 @@ export interface AnonymityTiers extends BaseContract {
     ],
     "view"
   >;
-  getFunction(
-    nameOrSignature: "getPseudonymousRecord"
-  ): TypedContractMethod<
+  getFunction(nameOrSignature: "getPseudonymousRecord"): TypedContractMethod<
     [uuid: string],
     [
       [bigint, bigint, string, bigint, boolean] & {
@@ -451,9 +435,7 @@ export interface AnonymityTiers extends BaseContract {
   getFunction(
     nameOrSignature: "getUserUUIDs"
   ): TypedContractMethod<[user: AddressLike], [string[]], "view">;
-  getFunction(
-    nameOrSignature: "identityRecords"
-  ): TypedContractMethod<
+  getFunction(nameOrSignature: "identityRecords"): TypedContractMethod<
     [arg0: string],
     [
       [bigint, bigint, bigint, string, bigint, boolean] & {
@@ -467,9 +449,7 @@ export interface AnonymityTiers extends BaseContract {
     ],
     "view"
   >;
-  getFunction(
-    nameOrSignature: "pseudonymousRecords"
-  ): TypedContractMethod<
+  getFunction(nameOrSignature: "pseudonymousRecords"): TypedContractMethod<
     [arg0: string],
     [
       [bigint, bigint, string, bigint, boolean] & {

@@ -14,11 +14,23 @@ import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import { backendService } from "@/lib/backend-service";
 
+interface WorldIdProof {
+  merkle_root: string;
+  nullifier_hash: string;
+  proof: string;
+  verification_level: string;
+}
+
+interface SelfProof {
+  proof: string;
+  publicSignals: string[];
+}
+
 interface ProofData {
-  worldId?: any;
+  worldId?: WorldIdProof;
   walletAddress?: string;
   walletSignature?: string;
-  selfProof?: any;
+  selfProof?: SelfProof;
   tier: string;
   timestamp: string;
 }
@@ -180,24 +192,28 @@ export default function ProofProcessPage() {
   }, [signature, currentStep, address, tier, proofData]);
 
   // Self Protocol verification handlers
-  const onSelfSuccess = async (result?: any) => {
+  const onSelfSuccess = async (result?: unknown) => {
     console.log("Self verification successful:", result);
     console.log("Self result structure:", result);
 
-    let selfProofData: any = {};
+    let selfProofData: SelfProof = { proof: "", publicSignals: [] };
+
+    // Type guard for result
+    const resultObj = result as Record<string, unknown>;
 
     // Try to extract proof data from our custom capture endpoint response
-    if (result && result.capturedProof) {
+    if (resultObj && resultObj.capturedProof) {
+      const capturedProof = resultObj.capturedProof as Record<string, unknown>;
       selfProofData = {
-        proof: result.capturedProof.proof,
-        publicSignals: result.capturedProof.publicSignals,
+        proof: capturedProof.proof as string,
+        publicSignals: capturedProof.publicSignals as string[],
       };
       console.log("Using captured proof data from custom endpoint");
-    } else if (result && result.proof && result.publicSignals) {
+    } else if (resultObj && resultObj.proof && resultObj.publicSignals) {
       // Direct proof data in result
       selfProofData = {
-        proof: result.proof,
-        publicSignals: result.publicSignals,
+        proof: resultObj.proof as string,
+        publicSignals: resultObj.publicSignals as string[],
       };
       console.log("Using direct proof data from result");
     } else {

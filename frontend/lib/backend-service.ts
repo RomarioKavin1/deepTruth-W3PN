@@ -84,6 +84,7 @@ export class BackendService {
     return await response.json();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async decryptVideo(videoFile: File): Promise<any> {
     const formData = new FormData();
     formData.append("video", videoFile);

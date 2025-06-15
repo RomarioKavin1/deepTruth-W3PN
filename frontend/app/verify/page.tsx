@@ -11,10 +11,13 @@ export default function VerifyPage() {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string>("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [ipfsRecord, setIpfsRecord] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [proofValidations, setProofValidations] = useState<any[]>([]);
   const [isValidatingProofs, setIsValidatingProofs] = useState(false);
 
@@ -42,7 +45,7 @@ export default function VerifyPage() {
       // Use configured gateway URL or fallback to multiple gateways
       const configuredGateway = process.env.NEXT_PUBLIC_GATEWAY_URL;
 
-      let gateways = [];
+      const gateways: string[] = [];
       if (configuredGateway) {
         // Use configured gateway first
         gateways.push(`${configuredGateway}/ipfs/${cid}`);
@@ -97,6 +100,7 @@ export default function VerifyPage() {
   };
 
   // Function to validate different proof types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const validateProof = async (proof: any, proofType: string) => {
     try {
       console.log(`Validating ${proofType} proof:`, proof);
@@ -129,6 +133,7 @@ export default function VerifyPage() {
   };
 
   // Location proof validation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const validateLocationProof = async (proof: any) => {
     // Mock validation - in real implementation, this would call external APIs
     if (!proof.latitude || !proof.longitude) {
@@ -166,6 +171,7 @@ export default function VerifyPage() {
   };
 
   // Timestamp proof validation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const validateTimestampProof = async (proof: any) => {
     if (!proof.timestamp) {
       return {
@@ -177,7 +183,6 @@ export default function VerifyPage() {
 
     const timestamp = new Date(proof.timestamp);
     const now = new Date();
-    const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
     if (isNaN(timestamp.getTime())) {
       return {
@@ -212,6 +217,7 @@ export default function VerifyPage() {
   };
 
   // Device proof validation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const validateDeviceProof = async (proof: any) => {
     if (!proof.deviceId && !proof.signature) {
       return {
@@ -236,6 +242,7 @@ export default function VerifyPage() {
   };
 
   // Biometric proof validation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const validateBiometricProof = async (proof: any) => {
     if (!proof.hash && !proof.signature) {
       return {

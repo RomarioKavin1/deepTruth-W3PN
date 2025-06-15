@@ -20,7 +20,6 @@ import {
   useCofhejsActivePermit,
 } from "@/hooks/useCofhejs";
 import { useCofhejsModalStore } from "@/components/CofhejsPermitModal";
-import { EncryptedValue } from "@/components/EncryptedValue";
 
 interface RecordData {
   worldIdProofCid?: string;
@@ -47,9 +46,12 @@ const ContractPage = () => {
   const [queryUuid, setQueryUuid] = useState("");
 
   // State for results
-  const [anonymousRecord, setAnonymousRecord] = useState<any>(null);
-  const [pseudonymousRecord, setPseudonymousRecord] = useState<any>(null);
-  const [identityRecord, setIdentityRecord] = useState<any>(null);
+  const [anonymousRecord, setAnonymousRecord] = useState<RecordData | null>(
+    null
+  );
+  const [pseudonymousRecord, setPseudonymousRecord] =
+    useState<RecordData | null>(null);
+  const [identityRecord, setIdentityRecord] = useState<RecordData | null>(null);
 
   // State for loading and errors
   const [txStatus, setTxStatus] = useState("");
@@ -123,6 +125,7 @@ const ContractPage = () => {
         address: ANONYMITY_TIERS_ADDRESS,
         abi: ANONYMITY_TIERS_ABI,
         functionName: "createAnonymousRecord",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         args: [encryptedWorldIdCid as any],
       });
     } catch (error) {
@@ -171,6 +174,7 @@ const ContractPage = () => {
         address: ANONYMITY_TIERS_ADDRESS,
         abi: ANONYMITY_TIERS_ABI,
         functionName: "createPseudonymousRecord",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         args: [encryptedWorldIdCid as any, encryptedSignatureCid as any],
       });
     } catch (error) {
@@ -237,8 +241,11 @@ const ContractPage = () => {
         abi: ANONYMITY_TIERS_ABI,
         functionName: "createIdentityRecord",
         args: [
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           encryptedWorldIdCid as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           encryptedSignatureCid as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           encryptedSelfVerificationCid as any,
         ],
       });

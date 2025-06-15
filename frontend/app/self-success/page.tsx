@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 
 interface SelfProofData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Flexible structure to match whatever Self library provides
 }
 
@@ -341,7 +342,8 @@ const SelfSuccessPage = () => {
               </h2>
               <p className="text-gray-600 mb-6">
                 It looks like you arrived here without completing a Self
-                passport verification, or the proof data wasn't stored properly.
+                passport verification, or the proof data wasn&apos;t stored
+                properly.
               </p>
               <button
                 onClick={goBack}

@@ -20,7 +20,7 @@ const CameraAnimation: React.FC = () => {
     if (!container || !shape1 || !shape2 || !shape3 || !shape4) return;
 
     // Create timeline for floating animations
-    const tl = gsap.timeline({ repeat: -1 });
+    gsap.timeline({ repeat: -1 });
 
     // Floating animations for each shape
     gsap.to(shape1, {

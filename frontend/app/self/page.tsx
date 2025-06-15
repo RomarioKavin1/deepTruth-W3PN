@@ -11,6 +11,7 @@ const SelfPage = () => {
     setUserId(uuidv4());
   }, []);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onSuccess = (result?: any) => {
     console.log("🎉 Self verification onSuccess callback triggered!");
     console.log("📦 Result data received:", result);

@@ -1,11 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { zeroAddress } from "viem";
-import { useStore } from "zustand";
 import { create } from "zustand";
-import { cofhejs, PermitOptions } from "cofhejs/web";
-import { useCofhejsAccount, useCofhejsStatus } from "../hooks/useCofhejs";
+import { cofhejs } from "cofhejs/web";
+import { useCofhejsStatus } from "../hooks/useCofhejs";
 
 interface CofhejsPermitModalStore {
   generatePermitModalOpen: boolean;

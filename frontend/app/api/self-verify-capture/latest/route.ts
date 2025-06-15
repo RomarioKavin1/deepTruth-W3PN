@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { proofStore } from "@/lib/proof-store";
 
 // This should reference the same store as the main capture endpoint
 // For now, we'll use a simple approach to get the latest proof data
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     // Get the latest proof data from the shared store
     const latestProof = proofStore.getLatest();

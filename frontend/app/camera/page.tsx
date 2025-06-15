@@ -472,7 +472,7 @@ export default function CameraPage() {
               <div>• Ensure good lighting conditions</div>
               <div>• Keep camera as steady as possible</div>
               <div>• Video will auto-process after recording</div>
-              <div>• Don't close tab during recording/processing</div>
+              <div>• Don&apos;t close tab during recording/processing</div>
               <div>• Your video will be deepfake-proof</div>
             </div>
           </div>

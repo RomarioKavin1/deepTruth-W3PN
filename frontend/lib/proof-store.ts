@@ -2,7 +2,9 @@
 // In production, this should be replaced with Redis or a database
 
 interface ProofData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   proof: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   publicSignals: any[];
   timestamp: string;
 }

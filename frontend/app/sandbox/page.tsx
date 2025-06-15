@@ -27,7 +27,10 @@ export default function SandboxPage() {
   const [verifyFile, setVerifyFile] = useState<File | null>(null);
   const [verifyVideoUrl, setVerifyVideoUrl] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [verificationResult, setVerificationResult] = useState<{
+    border_data?: string;
+    stego_data?: string;
+  } | null>(null);
   const [verifyError, setVerifyError] = useState<string>("");
 
   const videoRef = useRef<HTMLVideoElement>(null);

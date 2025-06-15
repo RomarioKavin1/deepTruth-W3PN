@@ -16,7 +16,7 @@ export default function LandingPage() {
       try {
         const isHealthy = await backendService.checkHealth();
         setBackendStatus(isHealthy ? "online" : "offline");
-      } catch (error) {
+      } catch {
         setBackendStatus("offline");
       }
     };
