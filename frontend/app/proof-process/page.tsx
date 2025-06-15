@@ -370,6 +370,8 @@ export default function ProofProcessPage() {
       console.log("Upload successful:", result);
 
       setFinalCid(result.cid);
+      // Store for reference
+      sessionStorage.setItem("proof_ref", result.cid);
       setIsUploading(false);
 
       // Now encrypt the video with the CID

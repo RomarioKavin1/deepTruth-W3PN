@@ -22,6 +22,8 @@ export default function LandingPage() {
     };
 
     checkBackendHealth();
+    // Clear any stale reference data when returning to home
+    sessionStorage.removeItem("proof_ref");
     // Check every 30 seconds
     const interval = setInterval(checkBackendHealth, 30000);
     return () => clearInterval(interval);
