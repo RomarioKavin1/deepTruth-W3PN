@@ -6,6 +6,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { backendService } from "@/lib/backend-service";
+import BackendStatus from "@/components/BackendStatus";
 
 export default function VerifyPage() {
   const [dragActive, setDragActive] = useState(false);
@@ -646,6 +647,9 @@ export default function VerifyPage() {
           <h1 className="text-4xl font-bold uppercase tracking-tight mb-8 text-center">
             VERIFY VIDEO AUTHENTICITY
           </h1>
+
+          {/* Backend Status */}
+          <BackendStatus size="large" className="mb-8" />
 
           {!file && (
             <div className="mb-8">

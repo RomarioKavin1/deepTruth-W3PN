@@ -3,30 +3,13 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import MorphingAnimation from "@/components/MorphingAnimation";
-import { useEffect, useState } from "react";
-import { backendService } from "@/lib/backend-service";
+import { useEffect } from "react";
+import BackendStatus from "@/components/BackendStatus";
 
 export default function LandingPage() {
-  const [backendStatus, setBackendStatus] = useState<
-    "checking" | "online" | "offline"
-  >("checking");
-
   useEffect(() => {
-    const checkBackendHealth = async () => {
-      try {
-        const isHealthy = await backendService.checkHealth();
-        setBackendStatus(isHealthy ? "online" : "offline");
-      } catch {
-        setBackendStatus("offline");
-      }
-    };
-
-    checkBackendHealth();
     // Clear any stale reference data when returning to home
     sessionStorage.removeItem("proof_ref");
-    // Check every 30 seconds
-    const interval = setInterval(checkBackendHealth, 30000);
-    return () => clearInterval(interval);
   }, []);
   return (
     <div className="min-h-screen bg-gray-100 font-mono">
@@ -37,24 +20,7 @@ export default function LandingPage() {
             <div className="text-2xl font-bold uppercase tracking-wider">
               DEEPERTRUTH
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  backendStatus === "online"
-                    ? "bg-green-500"
-                    : backendStatus === "offline"
-                    ? "bg-red-500"
-                    : "bg-yellow-500 animate-pulse"
-                }`}
-              ></div>
-              <span className="font-mono">
-                {backendStatus === "online"
-                  ? "BACKEND ONLINE"
-                  : backendStatus === "offline"
-                  ? "BACKEND OFFLINE"
-                  : "CHECKING..."}
-              </span>
-            </div>
+            <BackendStatus size="small" />
           </div>
           <nav className="flex gap-4">
             <Link
@@ -89,6 +55,9 @@ export default function LandingPage() {
                 VERIFIED, UNDENIABLE VIDEOS
               </p>
             </div>
+
+            {/* Prominent Backend Status */}
+            <BackendStatus size="large" />
 
             {/* Privacy Tier Cards */}
             <div className="space-y-4">

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { backendService } from "@/lib/backend-service";
+import BackendStatus from "@/components/BackendStatus";
 
 export default function SandboxPage() {
   // Tab management
@@ -140,6 +141,9 @@ export default function SandboxPage() {
           if (reader.result && typeof reader.result === "string") {
             setRecordedVideo(reader.result);
             sessionStorage.setItem("sandboxRecordedVideo", reader.result);
+
+            // Stop camera after recording is complete
+            cleanup();
           }
         };
         reader.readAsDataURL(recordedBlob);
@@ -311,6 +315,9 @@ export default function SandboxPage() {
       </header>
 
       <main className="max-w-4xl mx-auto p-6">
+        {/* Backend Status */}
+        <BackendStatus size="large" className="mb-6" />
+
         {/* Tab Navigation */}
         <div className="flex mb-6 border-4 border-black">
           <button
@@ -490,6 +497,30 @@ export default function SandboxPage() {
                         Your text has been embedded using steganography and the
                         video is ready for download.
                       </p>
+                    </div>
+
+                    {/* Encrypted Video Preview */}
+                    <div className="border-4 border-green-600 bg-white p-4">
+                      <h3 className="font-bold uppercase mb-3 text-green-800">
+                        🔐 ENCRYPTED VIDEO PREVIEW
+                      </h3>
+                      <video
+                        src={processedVideo}
+                        controls
+                        className="w-full max-w-2xl border-4 border-green-300"
+                      />
+                      <div className="mt-3 text-sm text-green-700">
+                        <div>
+                          <strong>Filename:</strong> {processedFilename}
+                        </div>
+                        <div>
+                          <strong>Status:</strong> Text embedded with
+                          steganography
+                        </div>
+                        <div>
+                          <strong>Embedded Text:</strong> {customText}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex gap-4">

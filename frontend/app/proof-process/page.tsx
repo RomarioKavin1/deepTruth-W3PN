@@ -13,6 +13,7 @@ import SelfQRcodeWrapper, { SelfAppBuilder } from "@selfxyz/qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import { backendService } from "@/lib/backend-service";
+import BackendStatus from "@/components/BackendStatus";
 
 interface WorldIdProof {
   merkle_root: string;
@@ -423,6 +424,9 @@ export default function ProofProcessPage() {
           <h1 className="text-4xl font-bold uppercase tracking-tight mb-8 text-center">
             GENERATING AUTHENTICITY PROOF
           </h1>
+
+          {/* Backend Status */}
+          <BackendStatus size="large" className="mb-8" />
 
           {/* Progress Steps */}
           <div className="space-y-4 mb-8">
