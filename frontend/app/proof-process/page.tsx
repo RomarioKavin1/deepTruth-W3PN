@@ -165,7 +165,7 @@ export default function ProofProcessPage() {
     console.log("Self verification successful:", result);
     console.log("Self result structure:", result);
 
-    let selfProofData = {};
+    let selfProofData: any = {};
 
     // Try to extract proof data from our custom capture endpoint response
     if (result && result.capturedProof) {
@@ -182,19 +182,41 @@ export default function ProofProcessPage() {
       };
       console.log("Using direct proof data from result");
     } else {
-      // Fallback: try to get from sessionStorage (from separate Self page)
-      const storedProof = sessionStorage.getItem("self_proof");
-      if (storedProof) {
-        try {
-          const parsedProof = JSON.parse(storedProof);
-          // Extract only proof and publicSignals
-          selfProofData = {
-            proof: parsedProof.proof || {},
-            publicSignals: parsedProof.publicSignals || [],
-          };
-          console.log("Using fallback proof data from sessionStorage");
-        } catch (error) {
-          console.error("Error parsing stored self proof:", error);
+      // Try to get the latest proof data from our capture endpoint
+      console.log(
+        "Attempting to fetch latest proof data from capture endpoint..."
+      );
+      try {
+        // Poll for recent proof data (last 30 seconds)
+        const response = await fetch(`/api/self-verify-capture/latest`);
+        if (response.ok) {
+          const latestProof = await response.json();
+          if (latestProof.proof && latestProof.publicSignals) {
+            selfProofData = {
+              proof: latestProof.proof,
+              publicSignals: latestProof.publicSignals,
+            };
+            console.log("Using latest proof data from capture endpoint");
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching latest proof data:", error);
+      }
+
+      // Final fallback: try sessionStorage
+      if (!selfProofData.proof) {
+        const storedProof = sessionStorage.getItem("self_proof");
+        if (storedProof) {
+          try {
+            const parsedProof = JSON.parse(storedProof);
+            selfProofData = {
+              proof: parsedProof.proof || {},
+              publicSignals: parsedProof.publicSignals || [],
+            };
+            console.log("Using fallback proof data from sessionStorage");
+          } catch (error) {
+            console.error("Error parsing stored self proof:", error);
+          }
         }
       }
     }

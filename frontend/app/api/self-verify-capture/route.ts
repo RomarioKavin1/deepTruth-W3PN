@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { proofStore } from "@/lib/proof-store";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,9 +16,19 @@ export async function POST(req: NextRequest) {
     console.log("Proof:", JSON.stringify(proof, null, 2));
     console.log("Public Signals:", JSON.stringify(publicSignals, null, 2));
 
-    // Store the proof data in a way that can be accessed by the frontend
-    // We'll use a simple approach - store in a global variable or use a better solution
-    // For now, we'll forward to the real endpoint and include the original data in response
+    // Generate a unique key for this proof session
+    const proofKey = `proof_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    // Store the proof data using shared store
+    const capturedData = {
+      proof: proof,
+      publicSignals: publicSignals,
+      timestamp: new Date().toISOString(),
+    };
+
+    proofStore.set(proofKey, capturedData);
 
     // Forward to the real Self verification endpoint
     const realEndpoint = "https://remo.crevn.xyz/api/self-verify";
@@ -33,7 +44,8 @@ export async function POST(req: NextRequest) {
     const result = await response.json();
 
     if (response.ok && result.status === "success") {
-      // Return success with the original proof data included
+      // Store the proof data in sessionStorage via the response
+      // The frontend can access this via a custom header or response body
       return NextResponse.json({
         ...result,
         // Include the original proof data that we captured
@@ -41,6 +53,7 @@ export async function POST(req: NextRequest) {
           proof: proof,
           publicSignals: publicSignals,
         },
+        proofKey: proofKey, // Include the key for potential future retrieval
       });
     } else {
       // Forward the error response
@@ -57,4 +70,28 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// GET endpoint to retrieve stored proof data
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const proofKey = url.searchParams.get("key");
+
+  if (!proofKey) {
+    return NextResponse.json({ error: "Proof key required" }, { status: 400 });
+  }
+
+  const storedData = proofStore.get(proofKey);
+
+  if (!storedData) {
+    return NextResponse.json(
+      { error: "Proof data not found" },
+      { status: 404 }
+    );
+  }
+
+  // Clean up after retrieval
+  proofStore.delete(proofKey);
+
+  return NextResponse.json(storedData);
 }
