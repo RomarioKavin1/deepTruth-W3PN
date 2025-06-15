@@ -97,7 +97,7 @@ const SelfPage = () => {
   }
 
   // Create the SelfApp configuration
-  const endpoint = "https://remo.crevn.xyz/api/self-verify";
+  const endpoint = "https://deep-truth-w3-pn.vercel.app/api/self-verify";
 
   // Use a shorter scope (max 25 characters)
   const scope = "deeptruth-app";

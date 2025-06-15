@@ -396,7 +396,7 @@ export default function ProofProcessPage() {
     ? new SelfAppBuilder({
         appName: "DeeperTruth Identity Verification",
         scope: "deeptruth-app",
-        endpoint: "https://remo.crevn.xyz/api/self-verify-capture", // Custom endpoint to capture proof data
+        endpoint: "https://deep-truth-w3-pn.vercel.app/api/self-verify-capture", // Custom endpoint to capture proof data
         endpointType: "https",
         userId: selfUserId,
         disclosures: {

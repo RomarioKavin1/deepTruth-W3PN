@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     proofStore.set(proofKey, capturedData);
 
     // Forward to the real Self verification endpoint
-    const realEndpoint = "https://remo.crevn.xyz/api/self-verify";
+    const realEndpoint = "https://deep-truth-w3-pn.vercel.app/api/self-verify";
 
     const response = await fetch(realEndpoint, {
       method: "POST",

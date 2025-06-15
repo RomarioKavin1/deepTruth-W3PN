@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     // IMPORTANT: Both scope and endpoint must exactly match the frontend
     const scope = "deeptruth-app"; // Same as frontend
-    const endpoint = "https://remo.crevn.xyz/api/self-verify";
+    const endpoint = "https://deep-truth-w3-pn.vercel.app/api/self-verify";
     const mockPassport = true;
 
     // Initialize and configure the verifier
