@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 export default function ResultPage() {
   const searchParams = useSearchParams();
@@ -10,6 +11,37 @@ export default function ResultPage() {
   const cid =
     searchParams.get("cid") ||
     "QmX7Hd9K2pL8vN3mR5tY6wZ1aB4cE7fG9hJ0kL2mN5oP8qR";
+  const encrypted = searchParams.get("encrypted") === "true";
+
+  const [encryptedVideoUrl, setEncryptedVideoUrl] = useState<string>("");
+  const [encryptedVideoBase64, setEncryptedVideoBase64] = useState<string>("");
+  const [encryptedVideoFilename, setEncryptedVideoFilename] =
+    useState<string>("");
+
+  useEffect(() => {
+    if (encrypted) {
+      // Get encrypted video data from sessionStorage
+      const videoBase64 = sessionStorage.getItem("encrypted_video_base64");
+      const filename = sessionStorage.getItem("encrypted_video_filename");
+
+      if (videoBase64) {
+        setEncryptedVideoBase64(videoBase64);
+        setEncryptedVideoFilename(filename || "encrypted_video.mp4");
+
+        // Convert base64 to blob URL for preview using proper method
+        const videoBlob = base64ToBlob(videoBase64, "video/mp4");
+        const videoUrl = URL.createObjectURL(videoBlob);
+        setEncryptedVideoUrl(videoUrl);
+      }
+    }
+
+    // Cleanup function
+    return () => {
+      if (encryptedVideoUrl) {
+        URL.revokeObjectURL(encryptedVideoUrl);
+      }
+    };
+  }, [encrypted]);
 
   const tierLabels = {
     anonymity: "ANONYMITY",
@@ -19,6 +51,37 @@ export default function ResultPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+  };
+
+  // Convert base64 to blob for video handling (same as your example)
+  const base64ToBlob = (base64: string, type: string): Blob => {
+    const byteCharacters = atob(base64);
+    const byteArrays = [];
+    for (let i = 0; i < byteCharacters.length; i += 512) {
+      const slice = byteCharacters.slice(i, i + 512);
+      const byteNumbers = new Array(slice.length);
+      for (let j = 0; j < slice.length; j++) {
+        byteNumbers[j] = slice.charCodeAt(j);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      byteArrays.push(byteArray);
+    }
+    return new Blob(byteArrays, { type });
+  };
+
+  const downloadEncryptedVideo = () => {
+    if (encryptedVideoBase64) {
+      const videoBlob = base64ToBlob(encryptedVideoBase64, "video/mp4");
+
+      const downloadUrl = URL.createObjectURL(videoBlob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = encryptedVideoFilename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+    }
   };
 
   return (
@@ -41,7 +104,9 @@ export default function ResultPage() {
       <main className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl font-bold uppercase tracking-tight mb-8 text-center">
-            VIDEO AUTHENTICATED
+            {encrypted
+              ? "VIDEO ENCRYPTED & AUTHENTICATED"
+              : "VIDEO AUTHENTICATED"}
           </h1>
 
           <div className="grid lg:grid-cols-2 gap-8">
@@ -49,20 +114,34 @@ export default function ResultPage() {
             <div className="space-y-4">
               <div className="border-4 border-black bg-white p-4">
                 <h2 className="font-bold uppercase mb-4 border-b-2 border-black pb-2">
-                  VERIFIED VIDEO
+                  ENCRYPTED VIDEO
                 </h2>
-                <div className="border-2 border-gray-300 bg-gray-900 aspect-video flex items-center justify-center text-white">
-                  <div className="text-center">
-                    <div className="text-4xl mb-2">🎥</div>
-                    <div className="font-mono text-sm">VIDEO PREVIEW</div>
-                    <div className="font-mono text-xs text-gray-400">
-                      1920x1080 • 00:45
+                {encryptedVideoUrl ? (
+                  <video
+                    controls
+                    className="w-full border-2 border-gray-300 aspect-video"
+                    src={encryptedVideoUrl}
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <div className="border-2 border-gray-300 bg-gray-900 aspect-video flex items-center justify-center text-white">
+                    <div className="text-center">
+                      <div className="text-4xl mb-2">🎥</div>
+                      <div className="font-mono text-sm">VIDEO PREVIEW</div>
+                      <div className="font-mono text-xs text-gray-400">
+                        1920x1080 • 00:45
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="mt-4 flex gap-2">
-                  <Button className="flex-1 bg-black text-white border-4 border-black font-bold uppercase hover:bg-white hover:text-black transition-colors">
+                  <Button
+                    onClick={downloadEncryptedVideo}
+                    disabled={!encryptedVideoBase64}
+                    className="flex-1 bg-black text-white border-4 border-black font-bold uppercase hover:bg-white hover:text-black transition-colors disabled:opacity-50"
+                  >
                     DOWNLOAD VIDEO
                   </Button>
                   <Button
@@ -103,12 +182,24 @@ export default function ResultPage() {
 
                   <div>
                     <div className="font-bold uppercase text-xs text-gray-600 mb-1">
-                      VERIFICATION STATUS
+                      ENCRYPTION STATUS
                     </div>
                     <div className="border-2 border-green-600 bg-green-50 p-2 font-bold text-green-800">
-                      ✅ VERIFIABLE
+                      ✅{" "}
+                      {encrypted ? "STEGANOGRAPHICALLY ENCRYPTED" : "VERIFIED"}
                     </div>
                   </div>
+
+                  {encrypted && (
+                    <div>
+                      <div className="font-bold uppercase text-xs text-gray-600 mb-1">
+                        EMBEDDED DATA
+                      </div>
+                      <div className="border-2 border-blue-600 bg-blue-50 p-2 font-bold text-blue-800">
+                        🔒 CID INVISIBLY EMBEDDED
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <div className="font-bold uppercase text-xs text-gray-600 mb-1">

@@ -12,6 +12,7 @@ import {
 import SelfQRcodeWrapper, { SelfAppBuilder } from "@selfxyz/qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
+import { backendService } from "@/lib/backend-service";
 
 interface ProofData {
   worldId?: any;
@@ -28,8 +29,26 @@ export default function ProofProcessPage() {
   const [proofData, setProofData] = useState<ProofData | null>(null);
   const [finalCid, setFinalCid] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [encryptedVideoUrl, setEncryptedVideoUrl] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [selfUserId, setSelfUserId] = useState<string>("");
+
+  // Convert base64 to blob utility function
+  const base64ToBlob = (base64: string, type: string): Blob => {
+    const byteCharacters = atob(base64.split(",")[1] || base64); // Handle data URL prefix
+    const byteArrays = [];
+    for (let i = 0; i < byteCharacters.length; i += 512) {
+      const slice = byteCharacters.slice(i, i + 512);
+      const byteNumbers = new Array(slice.length);
+      for (let j = 0; j < slice.length; j++) {
+        byteNumbers[j] = slice.charCodeAt(j);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      byteArrays.push(byteArray);
+    }
+    return new Blob(byteArrays, { type });
+  };
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -254,6 +273,55 @@ export default function ProofProcessPage() {
     }, 1000);
   };
 
+  // Encrypt video with CID
+  const encryptVideoWithCid = async (cid: string) => {
+    setIsEncrypting(true);
+    try {
+      // Get recorded video from sessionStorage
+      const recordedVideoData = sessionStorage.getItem("recorded_video");
+      const videoMimeType =
+        sessionStorage.getItem("video_mime_type") || "video/webm";
+
+      if (!recordedVideoData) {
+        throw new Error("No recorded video found");
+      }
+
+      // Convert base64 back to blob using the utility function
+      const videoBlob = base64ToBlob(recordedVideoData, videoMimeType);
+      const extension = videoMimeType.includes("mp4") ? ".mp4" : ".webm";
+      const videoFile = new File([videoBlob], `recorded_video${extension}`, {
+        type: videoMimeType,
+      });
+
+      // Encrypt video with CID as the text
+      console.log("Encrypting video with CID:", cid);
+      const encryptResult = await backendService.encryptVideo(videoFile, cid);
+
+      // Convert base64 to blob URL for preview using utility function
+      const encryptedVideoBlob = base64ToBlob(encryptResult.mp4, "video/mp4");
+      const encryptedVideoUrl = URL.createObjectURL(encryptedVideoBlob);
+      setEncryptedVideoUrl(encryptedVideoUrl);
+
+      console.log("Video encryption successful");
+
+      // Store encrypted video data for result page
+      sessionStorage.setItem("encrypted_video_base64", encryptResult.mp4);
+      sessionStorage.setItem(
+        "encrypted_video_filename",
+        encryptResult.mp4_filename
+      );
+    } catch (error) {
+      console.error("Video encryption error:", error);
+      setError(
+        `Failed to encrypt video: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setIsEncrypting(false);
+    }
+  };
+
   // Upload to IPFS
   const uploadToIPFS = async (data: ProofData) => {
     setIsUploading(true);
@@ -286,16 +354,20 @@ export default function ProofProcessPage() {
       console.log("Upload successful:", result);
 
       setFinalCid(result.cid);
+      setIsUploading(false);
+
+      // Now encrypt the video with the CID
+      await encryptVideoWithCid(result.cid);
+
       setIsComplete(true);
 
       // Auto-redirect to result page after 2 seconds
       setTimeout(() => {
-        router.push(`/result?tier=${tier}&cid=${result.cid}`);
+        router.push(`/result?tier=${tier}&cid=${result.cid}&encrypted=true`);
       }, 2000);
     } catch (error) {
       console.error("Upload error:", error);
       setError("Failed to upload proof to IPFS. Please try again.");
-    } finally {
       setIsUploading(false);
     }
   };
@@ -499,21 +571,60 @@ export default function ProofProcessPage() {
               </div>
             )}
 
+            {/* Video Encryption Progress */}
+            {isEncrypting && (
+              <div className="text-center">
+                <h2 className="text-2xl font-bold uppercase mb-4">
+                  ENCRYPTING VIDEO
+                </h2>
+                <div className="animate-spin w-8 h-8 border-2 border-black border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-gray-600">
+                  Embedding CID into video using steganography...
+                </p>
+                <div className="mt-4 text-sm text-gray-500">
+                  This process makes your video tamper-proof and verifiable
+                </div>
+              </div>
+            )}
+
             {/* Completion */}
             {isComplete && (
               <div className="text-center">
                 <h2 className="text-2xl font-bold uppercase mb-4 text-green-600">
-                  PROOF GENERATION COMPLETE!
+                  VIDEO ENCRYPTION COMPLETE!
                 </h2>
                 <div className="space-y-4">
                   <div className="text-green-600 text-6xl">✓</div>
                   <p className="text-gray-600">
-                    Your authenticity proof has been generated and stored on
-                    IPFS
+                    Your video has been encrypted with your authenticity proof
+                    CID
                   </p>
                   <div className="bg-gray-100 p-4 border-2 border-gray-300 font-mono text-sm break-all">
                     CID: {finalCid}
                   </div>
+                  {encryptedVideoUrl && (
+                    <div className="max-w-md mx-auto">
+                      <p className="text-sm text-gray-600 mb-2">
+                        Encrypted Video Preview:
+                      </p>
+                      <video
+                        controls
+                        autoPlay
+                        playsInline
+                        className="w-full border-2 border-black"
+                        src={encryptedVideoUrl}
+                        onLoadedMetadata={(e) => {
+                          // Ensure video metadata is loaded before playing
+                          const video = e.target as HTMLVideoElement;
+                          video.play().catch((err) => {
+                            console.log("Video autoplay prevented:", err);
+                          });
+                        }}
+                      >
+                        Your browser does not support the video tag.
+                      </video>
+                    </div>
+                  )}
                   <p className="text-sm text-gray-500">
                     Redirecting to results page...
                   </p>
@@ -545,11 +656,22 @@ export default function ProofProcessPage() {
                   {"> UPLOADING TO IPFS..."}
                 </div>
               )}
+              {finalCid && !isEncrypting && !isComplete && (
+                <div>{"> CID: {finalCid}"}</div>
+              )}
+              {isEncrypting && (
+                <div className="text-yellow-400">
+                  {"> ENCRYPTING VIDEO WITH CID..."}
+                </div>
+              )}
               {isComplete && (
                 <>
                   <div>{"> CID: {finalCid}"}</div>
+                  <div className="text-green-400">
+                    {"> VIDEO ENCRYPTION COMPLETE ✓"}
+                  </div>
                   <div className="text-white">
-                    {"> AUTHENTICITY PROOF GENERATION COMPLETE ✓"}
+                    {"> STEGANOGRAPHIC EMBEDDING SUCCESSFUL ✓"}
                   </div>
                 </>
               )}

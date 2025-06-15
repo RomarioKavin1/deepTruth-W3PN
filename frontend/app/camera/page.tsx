@@ -12,7 +12,10 @@ export default function CameraPage() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [processingStage, setProcessingStage] = useState("");
+  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  const [videoMimeType, setVideoMimeType] = useState<string>("video/webm");
   const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const tier = searchParams.get("tier") || "anonymity";
@@ -127,32 +130,104 @@ export default function CameraPage() {
   }, [isRecording]);
 
   const startRecording = () => {
+    if (!stream) return;
+
     setIsRecording(true);
     setRecordingTime(0);
-    setProcessingStage("INITIALIZING DEEPFAKE PROTECTION...");
+    setProcessingStage("");
+    setRecordedChunks([]); // Reset chunks
+
+    // Try to use MP4 if supported, following the same logic as your example
+    let mimeType = "";
+    if (MediaRecorder.isTypeSupported("video/mp4")) {
+      mimeType = "video/mp4";
+    } else if (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")) {
+      mimeType = "video/webm;codecs=vp9";
+    } else if (MediaRecorder.isTypeSupported("video/webm")) {
+      mimeType = "video/webm";
+    }
+
+    console.log("Using MIME type:", mimeType);
+    setVideoMimeType(mimeType || "video/webm");
+
+    // Lower bitrate for better compatibility
+    const bitrate = 1500000; // 1.5 Mbps
+
+    const options = mimeType
+      ? { mimeType, videoBitsPerSecond: bitrate }
+      : undefined;
+
+    try {
+      const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          setRecordedChunks((prev) => [...prev, event.data]);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        // We'll handle the video processing in stopRecording
+        setProcessingStage("PROCESSING VIDEO...");
+      };
+
+      // Collect data frequently for smoother results (like in your example)
+      mediaRecorder.start(100);
+    } catch (error) {
+      console.error("Error starting MediaRecorder:", error);
+      setProcessingStage("Failed to start recording. Try a different browser.");
+    }
   };
 
   const stopRecording = () => {
     setIsRecording(false);
-    setProcessingStage("EMBEDDING AUTHENTICITY PROOF VIA STEGANOGRAPHY...");
 
-    // Simulate processing stages
-    setTimeout(() => {
-      setProcessingStage("GENERATING PROOF HASH AND NULLIFIER...");
-    }, 1000);
-
-    setTimeout(() => {
-      setProcessingStage("UPLOADING VERIFICATION DATA TO IPFS...");
-    }, 2000);
-
-    setTimeout(() => {
-      // Stop camera before navigation
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-      router.push(`/proof-process?tier=${tier}`);
-    }, 3000);
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+    }
   };
+
+  // Handle video processing after recording stops
+  useEffect(() => {
+    if (
+      recordedChunks.length > 0 &&
+      !isRecording &&
+      processingStage === "PROCESSING VIDEO..."
+    ) {
+      const processVideo = async () => {
+        // Create video blob from chunks, like in your example
+        const videoBlob = new Blob(recordedChunks, { type: videoMimeType });
+
+        // Convert to base64 for storage
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          sessionStorage.setItem("recorded_video", reader.result as string);
+          sessionStorage.setItem("video_tier", tier);
+          sessionStorage.setItem("video_mime_type", videoMimeType);
+
+          // Stop camera before navigation
+          if (stream) {
+            stream.getTracks().forEach((track) => track.stop());
+          }
+
+          router.push(`/proof-process?tier=${tier}`);
+        };
+        reader.readAsDataURL(videoBlob);
+      };
+
+      // Small delay to ensure recording is fully stopped
+      setTimeout(processVideo, 500);
+    }
+  }, [
+    recordedChunks,
+    isRecording,
+    processingStage,
+    videoMimeType,
+    tier,
+    stream,
+    router,
+  ]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

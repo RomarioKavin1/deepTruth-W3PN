@@ -1,15 +1,58 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import MorphingAnimation from "@/components/MorphingAnimation";
+import { useEffect, useState } from "react";
+import { backendService } from "@/lib/backend-service";
 
 export default function LandingPage() {
+  const [backendStatus, setBackendStatus] = useState<
+    "checking" | "online" | "offline"
+  >("checking");
+
+  useEffect(() => {
+    const checkBackendHealth = async () => {
+      try {
+        const isHealthy = await backendService.checkHealth();
+        setBackendStatus(isHealthy ? "online" : "offline");
+      } catch (error) {
+        setBackendStatus("offline");
+      }
+    };
+
+    checkBackendHealth();
+    // Check every 30 seconds
+    const interval = setInterval(checkBackendHealth, 30000);
+    return () => clearInterval(interval);
+  }, []);
   return (
     <div className="min-h-screen bg-gray-100 font-mono">
       {/* Header */}
       <header className="border-b-4 border-black bg-white p-4">
         <div className="container mx-auto flex items-center justify-between">
-          <div className="text-2xl font-bold uppercase tracking-wider">
-            DEEPERTRUTH
+          <div className="flex items-center gap-4">
+            <div className="text-2xl font-bold uppercase tracking-wider">
+              DEEPERTRUTH
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  backendStatus === "online"
+                    ? "bg-green-500"
+                    : backendStatus === "offline"
+                    ? "bg-red-500"
+                    : "bg-yellow-500 animate-pulse"
+                }`}
+              ></div>
+              <span className="font-mono">
+                {backendStatus === "online"
+                  ? "BACKEND ONLINE"
+                  : backendStatus === "offline"
+                  ? "BACKEND OFFLINE"
+                  : "CHECKING..."}
+              </span>
+            </div>
           </div>
           <nav className="flex gap-4">
             <Link

@@ -854,6 +854,15 @@ def extract_border_data(video_path, temp_dir):
 
 
 # API endpoints
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for liveness check"""
+    return jsonify({
+        "status": "healthy",
+        "service": "steganography-backend",
+        "timestamp": datetime.now().isoformat()
+    }), 200
+
 @app.route('/encrypt', methods=['POST'])
 def encrypt_endpoint():
     """Endpoint to encrypt text and hide it in video"""
