@@ -1,54 +1,296 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useAccount, useSignMessage } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import {
+  IDKitWidget,
+  VerificationLevel,
+  ISuccessResult,
+} from "@worldcoin/idkit";
+import SelfQRcodeWrapper, { SelfAppBuilder } from "@selfxyz/qrcode";
+import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
+
+interface ProofData {
+  worldId?: any;
+  walletAddress?: string;
+  walletSignature?: string;
+  selfProof?: any;
+  tier: string;
+  timestamp: string;
+}
 
 export default function ProofProcessPage() {
   const [currentStep, setCurrentStep] = useState(0);
-  const [progress, setProgress] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
+  const [proofData, setProofData] = useState<ProofData | null>(null);
+  const [finalCid, setFinalCid] = useState<string>("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [selfUserId, setSelfUserId] = useState<string>("");
+
   const searchParams = useSearchParams();
+  const router = useRouter();
   const tier = searchParams.get("tier") || "anonymity";
+
+  // Wallet hooks
+  const { address, isConnected } = useAccount();
+  const {
+    signMessage,
+    data: signature,
+    isPending: isSigningPending,
+  } = useSignMessage();
 
   const tierSteps = {
     anonymity: [{ name: "WORLD ID VERIFICATION", status: "pending" }],
     pseudoAnon: [
       { name: "WORLD ID VERIFICATION", status: "pending" },
-      { name: "WALLET SIGNATURE", status: "pending" },
+      { name: "WALLET CONNECTION & SIGNATURE", status: "pending" },
     ],
     identity: [
       { name: "WORLD ID VERIFICATION", status: "pending" },
-      { name: "WALLET SIGNATURE", status: "pending" },
-      { name: "SELF PROTOCOL DID", status: "pending" },
+      { name: "WALLET CONNECTION & SIGNATURE", status: "pending" },
+      { name: "SELF PROTOCOL VERIFICATION", status: "pending" },
     ],
   };
 
   const [steps, setSteps] = useState(tierSteps[tier as keyof typeof tierSteps]);
 
+  // Initialize proof data and self user ID
   useEffect(() => {
-    const processSteps = async () => {
-      for (let i = 0; i < steps.length; i++) {
-        // Simulate processing time
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+    setProofData({
+      tier,
+      timestamp: new Date().toISOString(),
+    });
+    setSelfUserId(uuidv4());
+  }, [tier]);
 
-        setSteps((prev) =>
-          prev.map((step, idx) =>
-            idx === i ? { ...step, status: "completed" } : step
-          )
-        );
-        setCurrentStep(i + 1);
-        setProgress(((i + 1) / steps.length) * 100);
+  // World ID verification handlers
+  const handleWorldIdVerify = async (proof: ISuccessResult) => {
+    console.log("World ID proof received:", proof);
+    const res = await fetch("/api/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(proof),
+    });
+    if (!res.ok) {
+      throw new Error("World ID verification failed.");
+    }
+  };
+
+  const onWorldIdSuccess = (result: ISuccessResult) => {
+    console.log("World ID verification successful:", result);
+
+    // Update proof data
+    setProofData((prev) => ({
+      ...prev!,
+      worldId: result,
+    }));
+
+    // Mark step as completed
+    setSteps((prev) =>
+      prev.map((step, idx) =>
+        idx === 0 ? { ...step, status: "completed" } : step
+      )
+    );
+
+    setCurrentStep(1);
+
+    // If tier 1 (anonymity), proceed to upload
+    if (tier === "anonymity") {
+      setTimeout(() => {
+        uploadToIPFS({
+          tier,
+          timestamp: new Date().toISOString(),
+          worldId: result,
+        });
+      }, 1000);
+    }
+  };
+
+  // Wallet signature handling
+  useEffect(() => {
+    if (currentStep === 1 && (tier === "pseudoAnon" || tier === "identity")) {
+      if (!isConnected) {
+        // Wait for wallet connection
+        return;
       }
 
-      // Final processing
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setIsComplete(true);
+      // Auto-sign message once wallet is connected
+      const message = `DeeperTruth Video Proof - ${tier.toUpperCase()} - ${new Date().toISOString()}`;
+      signMessage({ message });
+    }
+  }, [currentStep, isConnected, tier, signMessage]);
+
+  // Handle wallet signature completion
+  useEffect(() => {
+    if (signature && currentStep === 1) {
+      console.log("Wallet signature completed:", signature);
+
+      // Update proof data
+      setProofData((prev) => ({
+        ...prev!,
+        walletAddress: address,
+        walletSignature: signature,
+      }));
+
+      // Mark step as completed
+      setSteps((prev) =>
+        prev.map((step, idx) =>
+          idx === 1 ? { ...step, status: "completed" } : step
+        )
+      );
+
+      setCurrentStep(2);
+
+      // If tier 2 (pseudoAnon), proceed to upload
+      if (tier === "pseudoAnon") {
+        setTimeout(() => {
+          uploadToIPFS({
+            ...proofData!,
+            walletAddress: address,
+            walletSignature: signature,
+          });
+        }, 1000);
+      }
+    }
+  }, [signature, currentStep, address, tier, proofData]);
+
+  // Self Protocol verification handlers
+  const onSelfSuccess = async (result?: any) => {
+    console.log("Self verification successful:", result);
+    console.log("Self result structure:", result);
+
+    let selfProofData = {};
+
+    // Try to extract proof data from our custom capture endpoint response
+    if (result && result.capturedProof) {
+      selfProofData = {
+        proof: result.capturedProof.proof,
+        publicSignals: result.capturedProof.publicSignals,
+      };
+      console.log("Using captured proof data from custom endpoint");
+    } else if (result && result.proof && result.publicSignals) {
+      // Direct proof data in result
+      selfProofData = {
+        proof: result.proof,
+        publicSignals: result.publicSignals,
+      };
+      console.log("Using direct proof data from result");
+    } else {
+      // Fallback: try to get from sessionStorage (from separate Self page)
+      const storedProof = sessionStorage.getItem("self_proof");
+      if (storedProof) {
+        try {
+          const parsedProof = JSON.parse(storedProof);
+          // Extract only proof and publicSignals
+          selfProofData = {
+            proof: parsedProof.proof || {},
+            publicSignals: parsedProof.publicSignals || [],
+          };
+          console.log("Using fallback proof data from sessionStorage");
+        } catch (error) {
+          console.error("Error parsing stored self proof:", error);
+        }
+      }
+    }
+
+    // Store the captured proof data in sessionStorage for potential future use
+    if (selfProofData && Object.keys(selfProofData).length > 0) {
+      sessionStorage.setItem(
+        "captured_self_proof",
+        JSON.stringify(selfProofData)
+      );
+    }
+
+    console.log("Final self proof data to store:", selfProofData);
+
+    // Update proof data
+    const finalProofData = {
+      ...proofData!,
+      selfProof: selfProofData,
     };
 
-    processSteps();
-  }, [steps.length]);
+    setProofData(finalProofData);
+
+    // Mark step as completed
+    setSteps((prev) =>
+      prev.map((step, idx) =>
+        idx === 2 ? { ...step, status: "completed" } : step
+      )
+    );
+
+    setCurrentStep(3);
+
+    // Upload to IPFS
+    setTimeout(() => {
+      uploadToIPFS(finalProofData);
+    }, 1000);
+  };
+
+  // Upload to IPFS
+  const uploadToIPFS = async (data: ProofData) => {
+    setIsUploading(true);
+    try {
+      console.log("Uploading proof data to IPFS:", data);
+
+      // Format data according to specified structure
+      const formattedData = {
+        worldproof: data.worldId || {},
+        Address: data.walletAddress || "",
+        Selfproof: data.selfProof || {},
+      };
+
+      const response = await fetch("/api/upload-proof", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          proofData: formattedData,
+          type: `${tier}-proof`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload to IPFS");
+      }
+
+      const result = await response.json();
+      console.log("Upload successful:", result);
+
+      setFinalCid(result.cid);
+      setIsComplete(true);
+
+      // Auto-redirect to result page after 2 seconds
+      setTimeout(() => {
+        router.push(`/result?tier=${tier}&cid=${result.cid}`);
+      }, 2000);
+    } catch (error) {
+      console.error("Upload error:", error);
+      setError("Failed to upload proof to IPFS. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Create Self app configuration with custom endpoint to capture proof data
+  const selfApp = selfUserId
+    ? new SelfAppBuilder({
+        appName: "DeeperTruth Identity Verification",
+        scope: "deeptruth-app",
+        endpoint: "https://remo.crevn.xyz/api/self-verify-capture", // Custom endpoint to capture proof data
+        endpointType: "https",
+        userId: selfUserId,
+        disclosures: {
+          minimumAge: 18,
+        },
+      }).build()
+    : null;
 
   return (
     <div className="min-h-screen bg-gray-100 font-mono">
@@ -59,15 +301,15 @@ export default function ProofProcessPage() {
             DEEPERTRUTH
           </div>
           <div className="text-sm font-bold uppercase tracking-wide">
-            PROOF GENERATION
+            PROOF GENERATION - {tier.toUpperCase()}
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-16">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl font-bold uppercase tracking-tight mb-8 text-center">
-            GENERATING PROOF
+            GENERATING AUTHENTICITY PROOF
           </h1>
 
           {/* Progress Steps */}
@@ -79,7 +321,7 @@ export default function ProofProcessPage() {
                   step.status === "completed"
                     ? "border-green-600 bg-green-50"
                     : currentStep === idx
-                    ? "border-black bg-white animate-pulse"
+                    ? "border-black bg-white"
                     : "border-gray-300 bg-gray-50"
                 }`}
               >
@@ -100,80 +342,197 @@ export default function ProofProcessPage() {
                       <h3 className="font-bold uppercase">{step.name}</h3>
                       <p className="text-sm text-gray-600 font-mono">
                         {step.status === "completed"
-                          ? "VERIFIED"
+                          ? "COMPLETED"
                           : currentStep === idx
-                          ? "PROCESSING..."
+                          ? "IN PROGRESS..."
                           : "PENDING"}
                       </p>
                     </div>
                   </div>
-
-                  {currentStep === idx && step.status !== "completed" && (
-                    <div className="font-mono text-xs text-gray-500">
-                      <div className="animate-pulse">PROCESSING...</div>
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
           </div>
 
-          {/* Progress Bar */}
-          <div className="mb-8">
-            <div className="border-4 border-black bg-white p-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-bold uppercase text-sm">
-                  EMBEDDING STEGOPROOF
-                </span>
-                <span className="font-mono text-sm">
-                  {Math.round(progress)}%
-                </span>
+          {/* Step Content */}
+          <div className="border-4 border-black bg-white p-8 mb-8">
+            {/* Step 1: World ID */}
+            {currentStep === 0 && (
+              <div className="text-center">
+                <h2 className="text-2xl font-bold uppercase mb-4">
+                  STEP 1: WORLD ID VERIFICATION
+                </h2>
+                <p className="text-gray-600 mb-6">
+                  Prove your humanity with World ID to prevent deepfakes
+                </p>
+
+                <div className="flex justify-center">
+                  <IDKitWidget
+                    app_id="app_6e916a8a4112922b1f33c7f899762c3d"
+                    action="verify-humanity"
+                    verification_level={VerificationLevel.Device}
+                    handleVerify={handleWorldIdVerify}
+                    onSuccess={onWorldIdSuccess}
+                    action_description="Verify humanity for DeeperTruth video proof"
+                  >
+                    {({ open }: { open: () => void }) => (
+                      <Button
+                        onClick={open}
+                        className="px-8 py-4 bg-black text-white border-4 border-black font-bold uppercase text-lg hover:bg-white hover:text-black transition-colors"
+                      >
+                        VERIFY WITH WORLD ID
+                      </Button>
+                    )}
+                  </IDKitWidget>
+                </div>
               </div>
-              <div className="border-2 border-black bg-gray-200 h-4">
-                <div
-                  className="bg-black h-full transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                ></div>
+            )}
+
+            {/* Step 2: Wallet Connection */}
+            {currentStep === 1 &&
+              (tier === "pseudoAnon" || tier === "identity") && (
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold uppercase mb-4">
+                    STEP 2: WALLET CONNECTION & SIGNATURE
+                  </h2>
+                  <p className="text-gray-600 mb-6">
+                    Connect your wallet and sign a message to link your address
+                  </p>
+
+                  {!isConnected ? (
+                    <div>
+                      <p className="text-sm text-gray-500 mb-4">
+                        Please connect your wallet to continue
+                      </p>
+                      <ConnectButton />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="text-green-600 font-bold">
+                        ✓ Wallet Connected: {address?.slice(0, 6)}...
+                        {address?.slice(-4)}
+                      </div>
+                      {isSigningPending ? (
+                        <div className="text-blue-600">
+                          Please sign the message in your wallet...
+                        </div>
+                      ) : signature ? (
+                        <div className="text-green-600 font-bold">
+                          ✓ Message Signed Successfully
+                        </div>
+                      ) : (
+                        <div className="text-gray-600">
+                          Preparing signature request...
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            {/* Step 3: Self Protocol */}
+            {currentStep === 2 && tier === "identity" && (
+              <div className="text-center">
+                <h2 className="text-2xl font-bold uppercase mb-4">
+                  STEP 3: SELF PROTOCOL IDENTITY VERIFICATION
+                </h2>
+                <p className="text-gray-600 mb-6">
+                  Verify your passport with Self Protocol for full identity
+                  proof
+                </p>
+
+                {selfApp ? (
+                  <div className="space-y-6">
+                    <div className="flex justify-center">
+                      <div className="bg-gray-50 p-6 rounded-lg border-2 border-gray-200">
+                        <SelfQRcodeWrapper
+                          selfApp={selfApp}
+                          onSuccess={onSelfSuccess}
+                          size={250}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-sm text-gray-500">
+                      <p>Scan with the Self app to verify your passport</p>
+                      <p>User ID: {selfUserId.substring(0, 8)}...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div>Loading Self verification...</div>
+                )}
               </div>
-            </div>
+            )}
+
+            {/* Upload Progress */}
+            {isUploading && (
+              <div className="text-center">
+                <h2 className="text-2xl font-bold uppercase mb-4">
+                  UPLOADING TO IPFS
+                </h2>
+                <div className="animate-spin w-8 h-8 border-2 border-black border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-gray-600">
+                  Storing your proof data securely on IPFS...
+                </p>
+              </div>
+            )}
+
+            {/* Completion */}
+            {isComplete && (
+              <div className="text-center">
+                <h2 className="text-2xl font-bold uppercase mb-4 text-green-600">
+                  PROOF GENERATION COMPLETE!
+                </h2>
+                <div className="space-y-4">
+                  <div className="text-green-600 text-6xl">✓</div>
+                  <p className="text-gray-600">
+                    Your authenticity proof has been generated and stored on
+                    IPFS
+                  </p>
+                  <div className="bg-gray-100 p-4 border-2 border-gray-300 font-mono text-sm break-all">
+                    CID: {finalCid}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Redirecting to results page...
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <div className="border-4 border-red-600 bg-red-50 p-6 mb-8">
+              <h3 className="font-bold uppercase text-red-800 mb-2">ERROR</h3>
+              <p className="text-red-600">{error}</p>
+            </div>
+          )}
+
           {/* Terminal Output */}
-          <div className="border-4 border-black bg-black text-green-400 p-4 font-mono text-sm mb-8">
+          <div className="border-4 border-black bg-black text-green-400 p-4 font-mono text-sm">
             <div className="space-y-1">
-              <div>{"> INITIALIZING CRYPTOGRAPHIC PIPELINE..."}</div>
+              <div>{"> INITIALIZING DEEPFAKE PROTECTION PIPELINE..."}</div>
               <div>{"> GENERATING STEGANOGRAPHIC PAYLOAD..."}</div>
               {currentStep > 0 && (
                 <div>{"> WORLD ID NULLIFIER EMBEDDED ✓"}</div>
               )}
               {currentStep > 1 && <div>{"> WALLET SIGNATURE EMBEDDED ✓"}</div>}
-              {currentStep > 2 && <div>{"> DID CREDENTIAL EMBEDDED ✓"}</div>}
+              {currentStep > 2 && <div>{"> SELF PROTOCOL DID EMBEDDED ✓"}</div>}
+              {isUploading && (
+                <div className="text-yellow-400">
+                  {"> UPLOADING TO IPFS..."}
+                </div>
+              )}
               {isComplete && (
                 <>
-                  <div>{"> UPLOADING TO IPFS..."}</div>
-                  <div>
-                    {"> CID: QmX7Hd9K2pL8vN3mR5tY6wZ1aB4cE7fG9hJ0kL2mN5oP8qR"}
-                  </div>
+                  <div>{"> CID: {finalCid}"}</div>
                   <div className="text-white">
-                    {"> PROOF GENERATION COMPLETE ✓"}
+                    {"> AUTHENTICITY PROOF GENERATION COMPLETE ✓"}
                   </div>
                 </>
               )}
             </div>
           </div>
-
-          {/* Continue Button */}
-          {isComplete && (
-            <div className="text-center">
-              <Link
-                href={`/result?tier=${tier}&cid=QmX7Hd9K2pL8vN3mR5tY6wZ1aB4cE7fG9hJ0kL2mN5oP8qR`}
-              >
-                <Button className="px-12 py-6 bg-black text-white border-4 border-black font-bold uppercase text-lg hover:bg-white hover:text-black transition-colors">
-                  VIEW RESULT
-                </Button>
-              </Link>
-            </div>
-          )}
         </div>
       </main>
     </div>
