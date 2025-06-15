@@ -129,3 +129,34 @@ The proof is **embedded into the video** itself using **steganography**, making 
 * Real-time recording + proof streaming support
 
 ---
+## Tracks
+
+* Applied Encryption
+     DeeperTruth is a strong contender for the Applied Encryption track because the core functionality of the platform relies on practical, real-world cryptographic techniques to ensure authenticity, privacy, and verifiability of video content:
+     
+     Steganographic Encryption: The platform uses steganography to embed cryptographic data (nullifiers, wallet signatures, DIDs) directly inside video frames, making the proof self-contained and tamper-evident.
+     
+     Zero-Knowledge Proof Integration: World ID provides ZK-based proof of humanity, which is hashed and stored on IPFS — an applied real-world use of ZK systems without leaking user identity.
+     
+     EIP-712 Signatures: Wallet-based signatures allow pseudonymous linking of proof to Web3 identities — practical applied cryptography used widely across Ethereum-based apps.
+     
+     DID Integration (Self Protocol): The use of DIDs (Decentralized Identifiers) applies cryptographic public/private key systems to verifiable identity in video media.
+     
+     IPFS Storage: The use of content-addressable hashes (CID) ensures cryptographic integrity and decentralization of proof data.
+
+Together, this stack demonstrates how cryptographic primitives can be applied holistically to secure, verify, and preserve sensitive media content in a decentralized way — an ideal showcase for applied encryption.
+
+ * Design (UI/UX)
+      DeeperTruth also qualifies strongly for the Design (UI/UX) track through a thoughtful balance of minimal interaction and maximum privacy protection:
+      
+      Simple, Streamlined Process: Users can record a video, select their desired privacy level (Anonymity, Pseudo-Anonymity, or Identity), and generate a verifiable proof in just a few clicks.
+      
+      No Wallet Required (Anonymity Tier): The platform lowers friction by requiring only a World ID scan for full anonymous proof — removing the usual Web3 onboarding pain points.
+      
+      Visual Privacy Model (Venn UI): The use of an interactive Venn diagram to explain and let users select their privacy level offers a unique, intuitive, and educational interface for understanding digital identity.
+      
+      Neo-Brutalist / Hacker Theme: The hacker-coding inspired brutalist design adds visual identity and aesthetic coherence to the idea of a trustless, anti-deepfake video tool — aligning form and function.
+      
+      Camera-First UX: No upload or drag-and-drop confusion — just open the platform, choose a mode, and start recording proof with zero setup friction.
+      
+      This level of polish and clarity ensures even non-technical users can confidently generate cryptographic video proofs without being overwhelmed — which is rare in Web3 tooling.
