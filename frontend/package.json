@@ -23,6 +23,7 @@
     "clsx": "^2.1.1",
     "cofhejs": "^0.3.0",
     "daisyui": "5.0.9",
+    "gsap": "^3.13.0",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.515.0",
     "next": "~15.2.3",

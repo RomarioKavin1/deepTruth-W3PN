@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import MorphingAnimation from "@/components/MorphingAnimation";
 
 export default function LandingPage() {
   return (
@@ -101,21 +102,9 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          {/* ASCII Art / Grid Background */}
+          {/* Morphing Animation */}
           <div className="hidden lg:block">
-            <div className="border-4 border-black bg-white p-8 font-mono text-xs leading-tight">
-              <pre className="text-gray-400">
-                {`┌─────────────────────────────────┐
-│ CRYPTOGRAPHIC PROOF PIPELINE    │
-├─────────────────────────────────┤
-│                                 │
-│  [VIDEO] → [STEGO] → [HASH]     │
-│     ↓         ↓        ↓        │
-│  [TIER] → [PROOF] → [IPFS]      │
-│                                 │
-└─────────────────────────────────┘`}
-              </pre>
-            </div>
+            <MorphingAnimation />
           </div>
         </div>
       </main>
