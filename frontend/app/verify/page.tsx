@@ -5,12 +5,33 @@ import type React from "react";
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { backendService } from "@/lib/backend-service";
 
 export default function VerifyPage() {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [error, setError] = useState<string>("");
+
+  // Function to clean CID by removing special characters
+  const cleanCid = (cid: string): string => {
+    // Remove any non-alphanumeric characters from CID
+    // IPFS CIDs should only contain letters and numbers
+    return cid.replace(/[^a-zA-Z0-9]/g, "");
+  };
+
+  // Function to validate if a string looks like a valid IPFS CID
+  const isValidCid = (cid: string): boolean => {
+    // Basic validation: CID should start with known prefixes and have reasonable length
+    const validPrefixes = ["Qm", "baf", "bag", "bah", "bai", "baj"];
+    const hasValidPrefix = validPrefixes.some((prefix) =>
+      cid.startsWith(prefix)
+    );
+    const hasValidLength = cid.length >= 40 && cid.length <= 100; // Reasonable CID length range
+    return hasValidPrefix && hasValidLength;
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -31,6 +52,11 @@ export default function VerifyPage() {
       const droppedFile = e.dataTransfer.files[0];
       if (droppedFile.type.startsWith("video/")) {
         setFile(droppedFile);
+
+        // Create video URL for preview
+        const url = URL.createObjectURL(droppedFile);
+        setVideoUrl(url);
+
         verifyFile(droppedFile);
       }
     }
@@ -40,6 +66,11 @@ export default function VerifyPage() {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
+
+      // Create video URL for preview
+      const url = URL.createObjectURL(selectedFile);
+      setVideoUrl(url);
+
       verifyFile(selectedFile);
     }
   };
@@ -47,24 +78,103 @@ export default function VerifyPage() {
   const verifyFile = async (file: File) => {
     setIsVerifying(true);
     setVerificationResult(null);
+    setError("");
 
-    // Simulate verification process
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      // Call the backend decrypt service
+      const result = await backendService.decryptVideo(file);
+      console.log("Decryption result:", result);
 
-    // Mock verification result
-    const mockResult = {
-      isValid: Math.random() > 0.3, // 70% chance of valid
-      tier: "identity",
-      cid: "QmX7Hd9K2pL8vN3mR5tY6wZ1aB4cE7fG9hJ0kL2mN5oP8qR",
-      timestamp: new Date().toISOString(),
-      worldIdValid: true,
-      walletValid: true,
-      didValid: true,
-      hash: "0x7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730",
-    };
+      // Check if we have any extracted data
+      const hasBorderData = result.border_data && result.border_data.trim();
+      const hasStegoData = result.stego_data && result.stego_data.trim();
 
-    setVerificationResult(mockResult);
-    setIsVerifying(false);
+      let extractedCid = null;
+      let originalCid = null;
+      let dataSource = "";
+      let rawData = "";
+
+      if (hasBorderData) {
+        rawData = result.border_data.trim();
+        dataSource = "border";
+
+        // Extract CID from border data (look for STEGO: prefix)
+        if (rawData.startsWith("STEGO:")) {
+          originalCid = rawData.substring(6).trim();
+        } else {
+          originalCid = rawData;
+        }
+        extractedCid = cleanCid(originalCid);
+      } else if (hasStegoData) {
+        rawData = result.stego_data.trim();
+        dataSource = "steganography";
+        originalCid = rawData;
+        extractedCid = cleanCid(rawData);
+      }
+
+      if (extractedCid && isValidCid(extractedCid)) {
+        // Successful extraction with valid CID
+        setVerificationResult({
+          isValid: true,
+          cid: extractedCid,
+          originalCid: originalCid,
+          dataSource: dataSource,
+          rawData: rawData,
+          timestamp: new Date().toISOString(),
+          fileInfo: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+          },
+        });
+      } else if (extractedCid && !isValidCid(extractedCid)) {
+        // Data found but doesn't look like valid CID
+        setVerificationResult({
+          isValid: false,
+          error: `Extracted data doesn't appear to be a valid CID: ${extractedCid}`,
+          originalCid: originalCid,
+          dataSource: dataSource,
+          rawData: rawData,
+          timestamp: new Date().toISOString(),
+          fileInfo: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+          },
+        });
+      } else {
+        // No data found
+        setVerificationResult({
+          isValid: false,
+          error: "No steganographic data found in video",
+          dataSource: null,
+          timestamp: new Date().toISOString(),
+          fileInfo: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Verification error:", error);
+      setError(
+        error instanceof Error ? error.message : "Unknown error occurred"
+      );
+      setVerificationResult({
+        isValid: false,
+        error:
+          error instanceof Error ? error.message : "Failed to verify video",
+        timestamp: new Date().toISOString(),
+        fileInfo: {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        },
+      });
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   return (
@@ -138,6 +248,21 @@ export default function VerifyPage() {
                   FILE INFORMATION
                 </h2>
 
+                {videoUrl && (
+                  <div className="mb-4">
+                    <div className="font-bold uppercase text-xs text-gray-600 mb-2">
+                      VIDEO PREVIEW
+                    </div>
+                    <video
+                      controls
+                      className="w-full border-2 border-gray-300 max-h-48"
+                      src={videoUrl}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                )}
+
                 <div className="space-y-3 font-mono text-sm">
                   <div>
                     <div className="font-bold uppercase text-xs text-gray-600 mb-1">
@@ -171,6 +296,17 @@ export default function VerifyPage() {
                   onClick={() => {
                     setFile(null);
                     setVerificationResult(null);
+                    setError("");
+                    // Clean up video URL
+                    if (videoUrl) {
+                      URL.revokeObjectURL(videoUrl);
+                      setVideoUrl(null);
+                    }
+                    // Reset file input
+                    const fileInput = document.getElementById(
+                      "fileInput"
+                    ) as HTMLInputElement;
+                    if (fileInput) fileInput.value = "";
                   }}
                   className="w-full mt-4 bg-white text-black border-4 border-black font-bold uppercase hover:bg-black hover:text-white transition-colors"
                 >
@@ -188,10 +324,13 @@ export default function VerifyPage() {
                   <div className="space-y-4">
                     <div className="border-4 border-black bg-black text-green-400 p-4 font-mono text-sm">
                       <div className="space-y-1">
-                        <div>{"> ANALYZING VIDEO FILE..."}</div>
-                        <div>{"> EXTRACTING STEGANOGRAPHIC DATA..."}</div>
-                        <div>{"> VERIFYING CRYPTOGRAPHIC SIGNATURES..."}</div>
-                        <div className="animate-pulse">{"> PROCESSING..."}</div>
+                        <div>{"> ANALYZING VIDEO FRAMES..."}</div>
+                        <div>{"> SCANNING FOR BORDER STEGANOGRAPHY..."}</div>
+                        <div>{"> CHECKING LSB STEGANOGRAPHIC DATA..."}</div>
+                        <div>{"> EXTRACTING EMBEDDED INFORMATION..."}</div>
+                        <div className="animate-pulse text-yellow-400">
+                          {"> PROCESSING..."}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -215,10 +354,12 @@ export default function VerifyPage() {
                       <div className="space-y-3 font-mono text-sm">
                         <div>
                           <div className="font-bold uppercase text-xs text-gray-600 mb-1">
-                            PRIVACY TIER
+                            EXTRACTION METHOD
                           </div>
                           <div className="bg-gray-100 p-2 border-2 border-gray-300 font-bold">
-                            {verificationResult.tier.toUpperCase()}
+                            {verificationResult.dataSource === "border"
+                              ? "BORDER STEGANOGRAPHY"
+                              : "LSB STEGANOGRAPHY"}
                           </div>
                         </div>
 
@@ -227,20 +368,70 @@ export default function VerifyPage() {
                             VERIFICATION LOG
                           </div>
                           <div className="bg-black text-green-400 p-3 font-mono text-xs">
-                            <div>{"> Checking hash... ✅"}</div>
-                            <div>{"> CID match ✅"}</div>
-                            <div>{"> WorldID nullifier valid ✅"}</div>
-                            <div>{"> Wallet signature verified ✅"}</div>
-                            <div>{"> DID credential valid ✅"}</div>
+                            <div>{"> Analyzing video frames... ✅"}</div>
+                            <div>{`> Extracting ${verificationResult.dataSource} data... ✅`}</div>
+                            <div>{"> Parsing embedded information... ✅"}</div>
+                            <div>{"> CID successfully extracted ✅"}</div>
                           </div>
                         </div>
 
                         <div>
                           <div className="font-bold uppercase text-xs text-gray-600 mb-1">
-                            IPFS CID
+                            EXTRACTED CID
                           </div>
-                          <div className="bg-gray-100 p-2 border-2 border-gray-300 break-all text-xs">
-                            {verificationResult.cid}
+                          <div className="bg-green-50 p-3 border-2 border-green-300 break-all text-xs font-mono">
+                            <div className="font-bold text-green-800 mb-1">
+                              IPFS CID:
+                            </div>
+                            <div className="text-green-600 mb-2">
+                              {verificationResult.cid}
+                            </div>
+                            {verificationResult.originalCid &&
+                              verificationResult.originalCid !==
+                                verificationResult.cid && (
+                                <div className="text-xs text-blue-600 mb-2 bg-blue-50 p-1 rounded">
+                                  ℹ️ Special characters removed from extracted
+                                  data
+                                  <div className="font-mono text-gray-500 mt-1">
+                                    Original: {verificationResult.originalCid}
+                                  </div>
+                                </div>
+                              )}
+                            <Button
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  verificationResult.cid
+                                );
+                                // Could add toast notification here
+                              }}
+                              className="text-xs py-1 px-2 bg-green-600 text-white border-2 border-green-700 font-bold uppercase hover:bg-green-700 transition-colors"
+                            >
+                              COPY CID
+                            </Button>
+                          </div>
+                        </div>
+
+                        {verificationResult.rawData &&
+                          verificationResult.rawData !==
+                            verificationResult.cid && (
+                            <div>
+                              <div className="font-bold uppercase text-xs text-gray-600 mb-1">
+                                RAW EXTRACTED DATA
+                              </div>
+                              <div className="bg-gray-100 p-2 border-2 border-gray-300 break-all text-xs">
+                                {verificationResult.rawData}
+                              </div>
+                            </div>
+                          )}
+
+                        <div>
+                          <div className="font-bold uppercase text-xs text-gray-600 mb-1">
+                            EXTRACTION TIMESTAMP
+                          </div>
+                          <div className="bg-gray-100 p-2 border-2 border-gray-300 text-xs">
+                            {new Date(
+                              verificationResult.timestamp
+                            ).toLocaleString()}
                           </div>
                         </div>
                       </div>
@@ -248,14 +439,26 @@ export default function VerifyPage() {
 
                     {!verificationResult.isValid && (
                       <div className="bg-black text-red-400 p-4 font-mono text-sm">
-                        <div>
-                          {"> ERROR: No valid steganographic proof found"}
-                        </div>
-                        <div>
-                          {
-                            "> This video may be tampered or not created with DeeperTruth"
-                          }
-                        </div>
+                        <div>{"> ERROR: No steganographic data found"}</div>
+                        <div>{"> Video may not contain DeeperTruth proof"}</div>
+                        <div>{"> Or may be corrupted/tampered with"}</div>
+                        {verificationResult.error && (
+                          <div className="mt-2 text-yellow-400">
+                            {`> Details: ${verificationResult.error}`}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Error display */}
+                    {error && (
+                      <div className="border-4 border-red-600 bg-red-50 p-4">
+                        <h3 className="font-bold uppercase text-red-800 mb-2">
+                          BACKEND ERROR
+                        </h3>
+                        <p className="text-red-600 font-mono text-sm">
+                          {error}
+                        </p>
                       </div>
                     )}
                   </div>
