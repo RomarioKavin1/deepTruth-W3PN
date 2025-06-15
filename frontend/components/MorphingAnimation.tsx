@@ -92,11 +92,12 @@ const MorphingAnimation: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex items-center justify-center">
+    <div className="flex flex-col items-center justify-center space-y-6">
+      {/* Morphing Animation - Much Bigger */}
       <div className="relative">
         <svg
           viewBox="0 0 160 160"
-          className="w-48 h-48 drop-shadow-lg"
+          className="w-96 h-96 drop-shadow-lg"
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
@@ -114,7 +115,7 @@ const MorphingAnimation: React.FC = () => {
               d="M 0 80 C 0 37.6, 37.6 0, 80 0 S 160 37.6, 160 80, 122.4 160, 80 160, 0 122.4, 0 80"
               fill="url(#blackWhiteRadial)"
               style={{
-                filter: "drop-shadow(4px 4px 0px rgba(0,0,0,0.5))",
+                filter: "drop-shadow(6px 6px 0px rgba(0,0,0,0.5))",
               }}
             />
 
@@ -124,7 +125,7 @@ const MorphingAnimation: React.FC = () => {
               d="M 10 10 L 150 10 L 150 150 L 10 150 Z"
               fill="url(#blackWhiteRadial)"
               style={{
-                filter: "drop-shadow(4px 4px 0px rgba(0,0,0,0.5))",
+                filter: "drop-shadow(6px 6px 0px rgba(0,0,0,0.5))",
               }}
             />
 
@@ -134,7 +135,7 @@ const MorphingAnimation: React.FC = () => {
               d="M 0 80 C 0 20, 20 0, 80 0 S 160 20, 160 80, 140 160, 80 160, 0 140, 0 80"
               fill="url(#blackWhiteRadial)"
               style={{
-                filter: "drop-shadow(4px 4px 0px rgba(0,0,0,0.5))",
+                filter: "drop-shadow(6px 6px 0px rgba(0,0,0,0.5))",
               }}
             />
           </g>
@@ -144,19 +145,31 @@ const MorphingAnimation: React.FC = () => {
         <div className="absolute inset-0 border-4 border-black pointer-events-none" />
       </div>
 
-      {/* Tech specs display */}
-      <div className="ml-8 space-y-2 font-mono text-xs">
-        <div className="border-2 border-black bg-white p-3">
-          <div className="text-black font-bold mb-2">PROOF MORPHOLOGY</div>
-          <div className="space-y-1 text-gray-600">
-            <div>○ CIRCLE → VERIFICATION</div>
-            <div>□ SQUARE → ENCRYPTION</div>
-            <div>◉ SQUIRCLE → STORAGE</div>
+      {/* Tech specs display - Now in column layout below */}
+      <div className="space-y-4 font-mono text-sm w-full max-w-sm">
+        <div className="border-4 border-black bg-white p-4">
+          <div className="text-black font-bold mb-3 text-lg uppercase">
+            PROOF MORPHOLOGY
+          </div>
+          <div className="space-y-2 text-gray-700">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">○</span>
+              <span>CIRCLE → VERIFICATION</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-lg">□</span>
+              <span>SQUARE → ENCRYPTION</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-lg">◉</span>
+              <span>SQUIRCLE → STEGANOGRAPHY</span>
+            </div>
           </div>
         </div>
-        <div className="border-2 border-black bg-black text-white p-3">
-          <div className="font-bold mb-1">STATUS: ACTIVE</div>
-          <div className="text-xs">MORPHING PROOF STATES</div>
+
+        <div className="border-4 border-black bg-black text-white p-4">
+          <div className="font-bold mb-2 text-lg uppercase">STATUS: ACTIVE</div>
+          <div className="text-sm text-gray-300">MORPHING PROOF STATES</div>
         </div>
       </div>
     </div>

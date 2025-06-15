@@ -73,7 +73,7 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <main className="container mx-auto px-4 py-16">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
           <div className="space-y-8">
             <div className="space-y-4">
               <h1 className="text-6xl font-bold uppercase tracking-tight leading-none">
@@ -152,8 +152,10 @@ export default function LandingPage() {
           </div>
 
           {/* Morphing Animation */}
-          <div className="hidden lg:block">
-            <MorphingAnimation />
+          <div className="hidden lg:flex lg:justify-center lg:items-start lg:pt-8">
+            <div className="w-full">
+              <MorphingAnimation />
+            </div>
           </div>
         </div>
       </main>
